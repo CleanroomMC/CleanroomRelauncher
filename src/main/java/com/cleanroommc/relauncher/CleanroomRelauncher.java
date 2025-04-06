@@ -65,21 +65,8 @@ public class CleanroomRelauncher {
             releases = CleanroomRelease.queryAll();
             latestRelease = releases.get(0);
 
-            // After retrieving releases, save them to releases.json
-            saveReleasesToCache(CACHE_DIR.resolve("releases.json"), releases);
-            LOGGER.info("Saved {} releases to cache.", releases.size());
-
         } catch (IOException e) {
-            if (Files.exists(CACHE_DIR.resolve("releases.json"))) {
-
-                LOGGER.info("Loading releases from cached releases.json");
-
-                // Load releases from local cache if internet isn't available
-                releases = loadReleasesFromCache(CACHE_DIR.resolve("releases.json"));
-                latestRelease = releases.get(0); // Assume at least one release is available
-            } else {
-                throw new RuntimeException("Unable to query Cleanroom's releases and no cached releases found.", e);
-            }
+            throw new RuntimeException("Unable to query Cleanroom's releases and no cached releases found.", e);
         }
 
         LOGGER.info("{} cleanroom releases were queried.", releases.size());
@@ -169,11 +156,6 @@ public class CleanroomRelauncher {
                 .flatMap(Collection::stream)
                 .collect(Collectors.joining(File.pathSeparator));
 
-        // Check if libraryClassPath is empty and log it for debugging
-        if (libraryClassPath.isEmpty()) {
-            LOGGER.warn("No libraries found in the classpath. Ensure that libraries are being downloaded.");
-        }
-
         String fullClassPath = wrapperClassPath + File.pathSeparator + libraryClassPath;
         arguments.add(fullClassPath); // Ensure this is not empty
 
@@ -214,39 +196,6 @@ public class CleanroomRelauncher {
             ExitVMBypass.exit(exitCode);
         } catch (IOException | InterruptedException e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Loads the cached {@link CleanroomRelease}'s from the specified file.
-     *
-     * @param releaseFile the path to the file containing cached release data.
-     * @return a list of {@link CleanroomRelease} objects loaded from the cache file.
-     *
-     * @throws RuntimeException if an {@link IOException} occurs while reading the file
-     *         or if the content cannot be properly deserialized into the list of releases.
-     */
-    private static List<CleanroomRelease> loadReleasesFromCache(Path releaseFile) {
-        try (Reader reader = Files.newBufferedReader(releaseFile)) {
-            return Arrays.asList(GSON.fromJson(reader, CleanroomRelease[].class));
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to load cached releases.", e);
-        }
-    }
-
-    /**
-     * Saves the list of releases to the specified cache file.
-     *
-     * @param releaseFile the path to the file where the releases should be saved.
-     * @param releases the list of {@link CleanroomRelease}'s to be saved.
-     *
-     * @throws RuntimeException if an {@link IOException} occurs while writing to the file.
-     */
-    private static void saveReleasesToCache(Path releaseFile, List<CleanroomRelease> releases) {
-        try (Writer writer = Files.newBufferedWriter(releaseFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            GSON.toJson(releases, writer);
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to save releases to cache.", e);
         }
     }
 }
