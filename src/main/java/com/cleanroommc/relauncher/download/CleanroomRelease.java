@@ -11,6 +11,7 @@ import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
@@ -84,6 +85,8 @@ public class CleanroomRelease {
         try (Writer writer = Files.newBufferedWriter(releaseFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
             CleanroomRelauncher.GSON.toJson(releases, writer);
             CleanroomRelauncher.LOGGER.info("Saved {} releases to cache.", releases.size());
+        } catch (NoSuchFileException e) {
+            throw new RuntimeException("The specified file does not exist: " + releaseFile, e);
         } catch (IOException e) {
             throw new RuntimeException("Unable to save releases to cache.", e);
         }
