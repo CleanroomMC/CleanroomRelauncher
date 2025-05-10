@@ -3,6 +3,7 @@ package com.cleanroommc.relauncher.download;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.google.gson.annotations.SerializedName;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -11,27 +12,33 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 public class CleanroomRelease {
 
-    private static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
+    public static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
 
     public static List<CleanroomRelease> queryAll() throws IOException {
         // Check if the cache file exists and is not outdated
         if (Files.exists(CACHE_FILE)) {
             CleanroomRelauncher.LOGGER.info("Loading releases from cached releases.json");
             try {
-                return fetchReleasesFromCache(CACHE_FILE);
+                List<CleanroomRelease> releases = new ArrayList<>();
+                releases.addAll(fetchReleasesFromCache(CACHE_FILE));
+                return releases;
             } catch (IOException e) {
                 Files.deleteIfExists(CACHE_FILE);
                 CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", e);
             }
         }
         CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
-        List<CleanroomRelease> releases = fetchReleasesFromGithub();
+        List<CleanroomRelease> releases = new ArrayList<>();
+        releases.addAll(fetchReleasesFromGithub());
 
         // After fetching releases, save them to the cache
         saveReleasesToCache(CACHE_FILE, releases);
@@ -80,7 +87,7 @@ public class CleanroomRelease {
      *
      * @throws RuntimeException if an {@link IOException} occurs while writing to the file.
      */
-    private static void saveReleasesToCache(Path releaseFile, List<CleanroomRelease> releases) {
+    public static void saveReleasesToCache(Path releaseFile, List<CleanroomRelease> releases) {
         releaseFile.toFile().getParentFile().mkdirs();
         try (Writer writer = Files.newBufferedWriter(releaseFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
             CleanroomRelauncher.GSON.toJson(releases, writer);
@@ -121,6 +128,54 @@ public class CleanroomRelease {
         public String downloadUrl;
         public long size;
 
+        public Asset(){}
+
+        public Asset(String name, String url, long size) {
+            this.name = name;
+            this.downloadUrl = url;
+            this.size = size;
+        }
+
+        public Asset(File file) {
+            try {
+                this.name = file.getName();
+                this.downloadUrl = file.toURI().toURL().toString();
+                this.size = file.length();
+            } catch (Throwable e) {
+                throw new RuntimeException("Unable to create a asset from a file.", e);
+            }
+        }
+
+    }
+
+    public static class Snapshot extends CleanroomRelease {
+        private static final Path SNAOSHOT_CACHE = CleanroomRelauncher.CACHE_DIR.resolve("snapshots/");
+        // MMC.zip, or installer.jar
+        private File artifact;
+        
+        private Snapshot(File artifact) {
+        
+            try{
+                Path sourcePath = artifact.toPath();
+                Path targetPath = Paths.get(SNAOSHOT_CACHE.toString(), artifact.getName());
+                Files.createDirectories(targetPath.getParent());
+                if (!Files.exists(targetPath)) {
+                    Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+                this.name = artifact.getName();
+                this.tagName = artifact.getName();
+                this.assets = new ArrayList();
+                Asset ass = new Asset(artifact);
+                ass.downloadUrl = targetPath.toUri().toURL().toString();
+                assets.add(ass);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
+        }
+
+        public static Snapshot of(File file) {
+            return new Snapshot(file);
+        }
     }
 
 }
