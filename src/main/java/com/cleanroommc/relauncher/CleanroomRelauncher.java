@@ -166,7 +166,7 @@ public class CleanroomRelauncher {
         }
 
         if (javaArgs != null && !javaArgs.isEmpty()) {
-            arguments.add(javaArgs);
+            Collections.addAll(arguments, javaArgs.split(" "));
         }
 
         arguments.add("-Djava.library.path=" + versions.stream().map(version -> version.nativesPaths).flatMap(Collection::stream).collect(Collectors.joining(File.pathSeparator)));
