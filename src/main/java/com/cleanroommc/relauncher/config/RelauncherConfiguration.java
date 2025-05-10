@@ -40,6 +40,8 @@ public class RelauncherConfiguration {
     private String javaExecutablePath;
     @SerializedName("args")
     private String javaArguments;
+    @SerializedName("language")
+    private String language;
 
     public String getCleanroomVersion() {
         return cleanroomVersion;
@@ -55,6 +57,10 @@ public class RelauncherConfiguration {
 
     public String getJavaArguments() {
         return javaArguments;
+    }
+
+    public String getLanguage() {
+        return language;
     }
 
     public void setCleanroomVersion(String cleanroomVersion) {
