@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.6] - 2025-05-10
+
+### Fixed
+- Arguments not being passed to the relaunching process properly (thanks to @PrototypeTrousers for the fix)
+
 ## [0.2.5] - 2025-04-24
 
 ### Fixed
