@@ -3,8 +3,8 @@ package com.cleanroommc.relauncher;
 import com.cleanroommc.javautils.JavaUtils;
 import com.cleanroommc.javautils.api.JavaVersion;
 import com.cleanroommc.relauncher.config.RelauncherConfiguration;
-import com.cleanroommc.relauncher.download.cache.CleanroomCache;
 import com.cleanroommc.relauncher.download.CleanroomRelease;
+import com.cleanroommc.relauncher.download.cache.CleanroomCache;
 import com.cleanroommc.relauncher.download.schema.Version;
 import com.cleanroommc.relauncher.gui.RelauncherGUI;
 import com.google.gson.Gson;
@@ -13,6 +13,7 @@ import net.minecraftforge.fml.cleanroomrelauncher.ExitVMBypass;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.util.ProcessIdUtil;
 
 import java.io.*;
 import java.lang.management.ManagementFactory;
@@ -121,7 +122,7 @@ public class CleanroomRelauncher {
         // TODO: compartmentalize this
         String wrapperClassPath;
         try {
-            Path wrapperFile = CleanroomRelauncher.CACHE_DIR.resolve("wrapper/com/cleanroommc/relauncher/wrapper/RelaunchMainWrapperV2.class");
+            Path wrapperFile = CleanroomRelauncher.CACHE_DIR.resolve("wrapper/com/cleanroommc/relauncher/wrapper/RelaunchMainWrapperV3.class");
             Path wrapperDirectory = wrapperFile.getParent();
             if (!Files.exists(wrapperFile)) {
                 Files.createDirectories(wrapperDirectory);
@@ -169,10 +170,13 @@ public class CleanroomRelauncher {
             Collections.addAll(arguments, javaArgs.split(" "));
         }
 
+        arguments.add("-Dcleanroom.relauncher.parent=" + ProcessIdUtil.getProcessId());
+        arguments.add("-Dcleanroom.mainClass=" + versions.get(0).mainClass);
         arguments.add("-Djava.library.path=" + versions.stream().map(version -> version.nativesPaths).flatMap(Collection::stream).collect(Collectors.joining(File.pathSeparator)));
 
-        arguments.add("com.cleanroommc.relauncher.wrapper.RelaunchMainWrapperV2");
+        arguments.add("com.cleanroommc.relauncher.wrapper.RelaunchMainWrapperV3");
 
+        // Forward any extra game launch arguments
         for (Map.Entry<String, String> launchArgument : ((Map<String, String>) Launch.blackboard.get("launchArgs")).entrySet()) {
             arguments.add(launchArgument.getKey());
             arguments.add(launchArgument.getValue());
@@ -180,10 +184,8 @@ public class CleanroomRelauncher {
 
         arguments.add("--tweakClass");
         arguments.add("net.minecraftforge.fml.common.launcher.FMLTweaker"); // Fixme, gather from Version?
-        arguments.add("--mainClass");
-        arguments.add(versions.get(0).mainClass);
 
-        LOGGER.debug("Arguments:");
+        LOGGER.debug("Relauncher arguments:");
         for (String arg: arguments) {
             LOGGER.debug(arg);
         }
