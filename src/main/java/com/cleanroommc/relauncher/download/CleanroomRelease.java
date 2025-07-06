@@ -13,30 +13,47 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
 
 public class CleanroomRelease {
 
     private static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
 
-    public static List<CleanroomRelease> queryAll() throws IOException {
+    public static List<CleanroomRelease> queryAll(boolean force) throws IOException {
+        HashMap<String, CleanroomRelease> map = new HashMap<>();
+
         // Check if the cache file exists and is not outdated
         if (Files.exists(CACHE_FILE)) {
             CleanroomRelauncher.LOGGER.info("Loading releases from cached releases.json");
             try {
-                return fetchReleasesFromCache(CACHE_FILE);
+                for(CleanroomRelease cleanroomRelease : fetchReleasesFromCache(CACHE_FILE)){
+                    map.put(cleanroomRelease.name, cleanroomRelease);
+                }
             } catch (IOException e) {
                 Files.deleteIfExists(CACHE_FILE);
                 CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", e);
             }
+        } else {
+            CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
         }
-        CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
-        List<CleanroomRelease> releases = fetchReleasesFromGithub();
+
+        if (!Files.exists(CACHE_FILE) || force) {
+            for(CleanroomRelease cleanroomRelease : fetchReleasesFromGithub()){
+                map.put(cleanroomRelease.name, cleanroomRelease);
+            }
+        }
+        List<CleanroomRelease> releases = new ArrayList<>(map.values());
 
         // After fetching releases, save them to the cache
         saveReleasesToCache(CACHE_FILE, releases);
 
         return releases;
+    }
+
+    public static List<CleanroomRelease> queryAll() throws IOException {
+        return queryAll(true);
     }
 
     private static List<CleanroomRelease> fetchReleasesFromGithub() throws IOException {
