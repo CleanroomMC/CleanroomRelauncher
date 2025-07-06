@@ -21,7 +21,7 @@ public class CleanroomRelease {
 
     private static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
 
-    public static List<CleanroomRelease> queryAll(boolean force) throws IOException {
+    public static List<CleanroomRelease> queryAll() throws IOException {
         HashMap<String, CleanroomRelease> map = new HashMap<>();
 
         // Check if the cache file exists and is not outdated
@@ -39,9 +39,13 @@ public class CleanroomRelease {
             CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
         }
 
-        if (!Files.exists(CACHE_FILE) || force) {
-            for(CleanroomRelease cleanroomRelease : fetchReleasesFromGithub()){
-                map.put(cleanroomRelease.name, cleanroomRelease);
+        if (!Files.exists(CACHE_FILE)) {
+            try {
+                for(CleanroomRelease cleanroomRelease : fetchReleasesFromGithub()){
+                    map.put(cleanroomRelease.name, cleanroomRelease);
+                }
+            } catch (Throwable t) {
+                
             }
         }
         List<CleanroomRelease> releases = new ArrayList<>(map.values());
@@ -50,10 +54,6 @@ public class CleanroomRelease {
         saveReleasesToCache(CACHE_FILE, releases);
 
         return releases;
-    }
-
-    public static List<CleanroomRelease> queryAll() throws IOException {
-        return queryAll(true);
     }
 
     private static List<CleanroomRelease> fetchReleasesFromGithub() throws IOException {
