@@ -21,8 +21,9 @@ public class CleanroomRelease {
 
     private static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
 
-    public static List<CleanroomRelease> queryAll() throws IOException {
+    public static List<CleanroomRelease> queryAll(boolean update) throws IOException {
         HashMap<String, CleanroomRelease> map = new HashMap<>();
+        boolean updated = false;
 
         // Check if the cache file exists and is not outdated
         if (Files.exists(CACHE_FILE)) {
@@ -35,25 +36,34 @@ public class CleanroomRelease {
                 Files.deleteIfExists(CACHE_FILE);
                 CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", e);
             }
+            if (update) {
+                try {
+                    updated = true;
+                    for(CleanroomRelease cleanroomRelease : fetchReleasesFromGithub()){
+                        map.put(cleanroomRelease.name, cleanroomRelease);
+                    }
+                } catch (IOException e) {
+                    CleanroomRelauncher.LOGGER.error("Unable to fetch from GitHub", e);
+                }
+            }
         } else {
             CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
-        }
-
-        if (!Files.exists(CACHE_FILE)) {
-            try {
-                for(CleanroomRelease cleanroomRelease : fetchReleasesFromGithub()){
-                    map.put(cleanroomRelease.name, cleanroomRelease);
-                }
-            } catch (Throwable t) {
-                
+            updated = true;
+            for(CleanroomRelease cleanroomRelease : fetchReleasesFromGithub()){
+                map.put(cleanroomRelease.name, cleanroomRelease);
             }
         }
         List<CleanroomRelease> releases = new ArrayList<>(map.values());
 
         // After fetching releases, save them to the cache
-        saveReleasesToCache(CACHE_FILE, releases);
+        if (updated)
+            saveReleasesToCache(CACHE_FILE, releases);
 
         return releases;
+    }
+
+    public static List<CleanroomRelease> queryAll() throws IOException {
+        return queryAll(false);
     }
 
     private static List<CleanroomRelease> fetchReleasesFromGithub() throws IOException {
