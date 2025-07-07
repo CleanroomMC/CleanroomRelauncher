@@ -12,6 +12,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
@@ -20,22 +21,27 @@ public class CleanroomRelease {
     private static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
 
     public static List<CleanroomRelease> queryAll() throws IOException {
-        // Check if the cache file exists and is not outdated
+        long ttlM = Duration.ofHours(1).toMillis(); // TODO: configurable, this is temp
         if (Files.exists(CACHE_FILE)) {
-            CleanroomRelauncher.LOGGER.info("Loading releases from cached releases.json");
+            CleanroomRelauncher.LOGGER.info("Loading releases from cached json.");
             try {
-                return fetchReleasesFromCache(CACHE_FILE);
-            } catch (IOException e) {
-                Files.deleteIfExists(CACHE_FILE);
-                CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", e);
+                long fileModifiedM = Files.getLastModifiedTime(CACHE_FILE).toMillis();
+                long nowM = System.currentTimeMillis();
+                long diffM = nowM - fileModifiedM;
+                if (diffM < ttlM) {
+                    return fetchReleasesFromCache(CACHE_FILE);
+                }
+            } catch (Throwable t) {
+                Files.delete(CACHE_FILE);
+                CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", t);
             }
+        } else {
+            CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
         }
-        CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
         List<CleanroomRelease> releases = fetchReleasesFromGithub();
 
         // After fetching releases, save them to the cache
         saveReleasesToCache(CACHE_FILE, releases);
-
         return releases;
     }
 
