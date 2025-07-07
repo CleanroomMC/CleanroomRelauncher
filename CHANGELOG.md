@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0] - 2025-07-08
+
+### Added
+- 1hr time-to-live for cached releases, this should be temporary and a better solution may come
+
+### Fixed
+- Arguments being piped into relaunched process
+- Improved performance with wrapper, as it triggered Windows Defender and hiked CPU percentage
+
+### Changed
+- Added exclamation mark at the beginning of file for Forge to load relauncher's coremod earlier
+- Simplified checking and replacing of wrapper classes if it ever updates
+
 ## [0.2.6] - 2025-05-10
 
 ### Fixed
