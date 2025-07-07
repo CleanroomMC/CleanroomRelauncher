@@ -199,11 +199,11 @@ public class CleanroomRelauncher {
         String fullClassPath = wrapperClassPath + File.pathSeparator + libraryClassPath;
         arguments.add(fullClassPath); // Ensure this is not empty
 
-        for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
-            if (!argument.startsWith("-Djava.library.path")) {
-                arguments.add(argument);
-            }
-        }
+//        for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+//            if (!argument.startsWith("-Djava.library.path")) {
+//                arguments.add(argument);
+//            }
+//        }
 
         if (javaArgs != null && !javaArgs.isEmpty()) {
             Collections.addAll(arguments, javaArgs.split(" "));
