@@ -10,7 +10,7 @@ public class CleanroomEntrypoint implements IFMLLoadingPlugin {
 
     public CleanroomEntrypoint() {
         if (FMLLaunchHandler.side().isClient()) {
-            new CleanroomRelauncher().run();
+            CleanroomRelauncher.run();
         } else {
             CleanroomRelauncher.LOGGER.fatal("Server-side relaunching is not yet supported!");
         }

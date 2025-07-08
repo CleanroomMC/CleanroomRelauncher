@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,25 +31,27 @@ public class CleanroomRelease {
     public static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
 
     public static List<CleanroomRelease> queryAll() throws IOException {
-        // Check if the cache file exists and is not outdated
+        long ttlM = Duration.ofHours(1).toMillis(); // TODO: configurable, this is temp
         if (Files.exists(CACHE_FILE)) {
-            CleanroomRelauncher.LOGGER.info("Loading releases from cached releases.json");
+            CleanroomRelauncher.LOGGER.info("Loading releases from cached json.");
             try {
-                List<CleanroomRelease> releases = new ArrayList<>();
-                releases.addAll(fetchReleasesFromCache(CACHE_FILE));
-                return releases;
-            } catch (IOException e) {
-                Files.deleteIfExists(CACHE_FILE);
-                CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", e);
+                long fileModifiedM = Files.getLastModifiedTime(CACHE_FILE).toMillis();
+                long nowM = System.currentTimeMillis();
+                long diffM = nowM - fileModifiedM;
+                if (diffM < ttlM) {
+                    return new ArrayList<>(fetchReleasesFromCache(CACHE_FILE));
+                }
+            } catch (Throwable t) {
+                Files.delete(CACHE_FILE);
+                CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", t);
             }
+        } else {
+            CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
         }
-        CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
-        List<CleanroomRelease> releases = new ArrayList<>();
-        releases.addAll(fetchReleasesFromGithub());
+        List<CleanroomRelease> releases =  new ArrayList<>(fetchReleasesFromGithub());
 
         // After fetching releases, save them to the cache
         saveReleasesToCache(CACHE_FILE, releases);
-
         return releases;
     }
 
