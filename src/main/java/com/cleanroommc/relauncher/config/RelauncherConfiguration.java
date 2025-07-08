@@ -1,84 +1,140 @@
 package com.cleanroommc.relauncher.config;
 
 import com.cleanroommc.relauncher.CleanroomRelauncher;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.annotations.SerializedName;
+import com.google.gson.*;
 import net.minecraft.launchwrapper.Launch;
+import net.minecraftforge.common.config.Configuration;
+import net.minecraftforge.common.config.Property;
 
 import java.io.*;
 
 public class RelauncherConfiguration {
-
-    public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    public static final File FILE = new File(Launch.minecraftHome, "config/relauncher.json");
-
+    
+    public static final File FILE = new File(Launch.minecraftHome, "config/cleanroom_relauncher.cfg");
+    
+    private static final Configuration forgedConfig;
+    
+    
     static {
-        File oldConfig = new File(Launch.minecraftHome, "cleanroom-relauncher-v1.properties");
-        if (oldConfig.exists()) {
-            oldConfig.delete();
+        JsonObject v2ConfigJson;
+        {
+            File v1Config = new File(Launch.minecraftHome, "cleanroom-relauncher-v1.properties");
+            if (v1Config.exists()) {
+                if (!v1Config.delete())
+                    CleanroomRelauncher.LOGGER.error("Unable to delete ./cleanroom-relauncher-v1.properties");
+            }
+        }
+        {
+            File v2Config = new File(Launch.minecraftHome, "config/relauncher.json");
+            if (v2Config.exists()) {
+                try (FileReader reader = new FileReader(v2Config)) {
+                    v2ConfigJson = (JsonObject) new JsonParser().parse(reader);
+                } catch (Throwable e) {
+                    CleanroomRelauncher.LOGGER.error("Unable to read v2Config", e);
+                    v2ConfigJson = null;
+                }
+                if (!v2Config.delete())
+                    CleanroomRelauncher.LOGGER.error("Unable to delete ./config/relauncher.json");
+            } else {
+                v2ConfigJson = null;
+            }
+        }
+        Configuration v3Config = new Configuration(FILE);
+        v3Config.load();
+        Property prop;
+        { // cleanroom
+            { // selectedVersion
+                prop = v3Config.get("cleanroom", "selectedVersion", "",
+                        "The selected version of Cleanroom to relaunch", Property.Type.STRING
+                );
+                // update v2
+                if (v2ConfigJson != null)
+                    updateStringElement(prop, v2ConfigJson, "selectedVersion");
+            }
+            {
+                prop = v3Config.get("cleanroom", "latestVersion", "",
+                        "The latest version of Cleanroom", Property.Type.STRING
+                );
+                if (v2ConfigJson != null)
+                    updateStringElement(prop, v2ConfigJson, "latestVersion");
+            }
+        }
+        {
+            {
+                prop = v3Config.get("java", "javaPath", "",
+                        "The path of the java executable", Property.Type.STRING
+                );
+                if (v2ConfigJson != null)
+                    updateStringElement(prop, v2ConfigJson, "javaPath");
+            }
+            {
+                prop = v3Config.get("java", "args", "",
+                        "The java arguments", Property.Type.STRING
+                );
+                if (v2ConfigJson != null)
+                    updateStringElement(prop, v2ConfigJson, "args");
+            }
+        }
+        if (v3Config.hasChanged()) v3Config.save();
+        forgedConfig = v3Config;
+
+    }
+    
+    private static void updateStringElement(Property property, JsonObject jsonObject, String name){
+        if (jsonObject.has(name)) {
+            JsonElement element = jsonObject.get(name);
+            if (element.isJsonPrimitive()) {
+                JsonPrimitive primitive = element.getAsJsonPrimitive();
+                if (primitive.isString()) {
+                    property.set(primitive.getAsString());
+                }
+            }
         }
     }
 
     public static RelauncherConfiguration read() {
-        if (!FILE.exists()) {
-            return new RelauncherConfiguration();
-        }
-        try (FileReader reader = new FileReader(FILE)) {
-            return GSON.fromJson(reader, RelauncherConfiguration.class);
-        } catch (IOException e) {
-            CleanroomRelauncher.LOGGER.error("Unable to read config", e);
-            return new RelauncherConfiguration();
-        }
+        return new RelauncherConfiguration();
     }
 
-    @SerializedName("selectedVersion")
-    private String cleanroomVersion;
-    @SerializedName("latestVersion")
-    private String latestCleanroomVersion;
-    @SerializedName("javaPath")
-    private String javaExecutablePath;
-    @SerializedName("args")
-    private String javaArguments;
+    private static String nullable(String str) {
+        return str == null || str.isEmpty() ? null : str;
+    }
 
     public String getCleanroomVersion() {
-        return cleanroomVersion;
+        return nullable(forgedConfig.getCategory("cleanroom").get("selectedVersion").getString());
     }
 
     public String getLatestCleanroomVersion() {
-        return latestCleanroomVersion;
+        return nullable(forgedConfig.getCategory("cleanroom").get("latestVersion").getString());
     }
 
     public String getJavaExecutablePath() {
-        return javaExecutablePath;
+        return nullable(forgedConfig.getCategory("java").get("javaPath").getString());
     }
 
     public String getJavaArguments() {
-        return javaArguments;
+        return nullable(forgedConfig.getCategory("java").get("args").getString());
     }
 
     public void setCleanroomVersion(String cleanroomVersion) {
-        this.cleanroomVersion = cleanroomVersion;
+        forgedConfig.getCategory("cleanroom").get("selectedVersion").set(cleanroomVersion);
     }
 
     public void setLatestCleanroomVersion(String latestCleanroomVersion) {
-        this.latestCleanroomVersion = latestCleanroomVersion;
+        forgedConfig.getCategory("cleanroom").get("latestVersion").set(latestCleanroomVersion);
     }
 
     public void setJavaExecutablePath(String javaExecutablePath) {
-        this.javaExecutablePath = javaExecutablePath.replace("\\\\", "/");
+        forgedConfig.getCategory("java").get("javaPath").set(javaExecutablePath.replace("\\\\", "/"));
     }
 
     public void setJavaArguments(String javaArguments) {
-        this.javaArguments = javaArguments;
+        forgedConfig.getCategory("java").get("args").set(javaArguments);
     }
 
     public void save() {
-        FILE.getParentFile().mkdirs();
-        try (FileWriter writer = new FileWriter(FILE)) {
-            GSON.toJson(this, writer);
-        } catch (IOException e) {
-            CleanroomRelauncher.LOGGER.error("Unable to save config", e);
+        if (forgedConfig.hasChanged()) {
+            forgedConfig.save();
         }
     }
 
