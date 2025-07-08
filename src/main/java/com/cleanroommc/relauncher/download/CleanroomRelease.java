@@ -12,6 +12,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,9 +26,8 @@ public class CleanroomRelease {
         HashMap<String, CleanroomRelease> map = new HashMap<>();
         boolean updated = false;
 
-        // Check if the cache file exists and is not outdated
         if (Files.exists(CACHE_FILE)) {
-            CleanroomRelauncher.LOGGER.info("Loading releases from cached releases.json");
+            CleanroomRelauncher.LOGGER.info("Loading releases from cached json.");
             try {
                 for(CleanroomRelease cleanroomRelease : fetchReleasesFromCache(CACHE_FILE)){
                     map.put(cleanroomRelease.name, cleanroomRelease);
@@ -36,7 +36,11 @@ public class CleanroomRelease {
                 Files.deleteIfExists(CACHE_FILE);
                 CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", e);
             }
-            if (update) {
+            long ttlM = Duration.ofHours(1).toMillis(); // TODO: configurable, this is temp
+            long fileModifiedM = Files.getLastModifiedTime(CACHE_FILE).toMillis();
+            long nowM = System.currentTimeMillis();
+            long diffM = nowM - fileModifiedM;
+            if (update || diffM < ttlM) {
                 try {
                     updated = true;
                     for(CleanroomRelease cleanroomRelease : fetchReleasesFromGithub()){
@@ -58,7 +62,6 @@ public class CleanroomRelease {
         // After fetching releases, save them to the cache
         if (updated)
             saveReleasesToCache(CACHE_FILE, releases);
-
         return releases;
     }
 
