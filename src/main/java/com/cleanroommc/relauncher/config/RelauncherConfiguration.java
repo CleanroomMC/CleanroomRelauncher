@@ -14,13 +14,6 @@ public class RelauncherConfiguration {
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     public static final File FILE = new File(Launch.minecraftHome, "config/relauncher.json");
 
-    static {
-        File oldConfig = new File(Launch.minecraftHome, "cleanroom-relauncher-v1.properties");
-        if (oldConfig.exists()) {
-            oldConfig.delete();
-        }
-    }
-
     public static RelauncherConfiguration read() {
         if (!FILE.exists()) {
             return new RelauncherConfiguration();
