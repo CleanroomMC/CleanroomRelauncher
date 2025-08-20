@@ -25,7 +25,7 @@ public class RelauncherConfiguration {
         if (!FILE.exists()) {
             return new RelauncherConfiguration();
         }
-        try (FileReader reader = new FileReader(FILE)) {
+        try (Reader reader = new InputStreamReader(new FileInputStream(FILE), StandardCharsets.UTF_8)) {
             return GSON.fromJson(reader, RelauncherConfiguration.class);
         } catch (IOException e) {
             CleanroomRelauncher.LOGGER.error("Unable to read config", e);
