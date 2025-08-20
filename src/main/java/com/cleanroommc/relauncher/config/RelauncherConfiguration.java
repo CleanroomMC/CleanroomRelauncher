@@ -7,6 +7,7 @@ import com.google.gson.annotations.SerializedName;
 import net.minecraft.launchwrapper.Launch;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 
 public class RelauncherConfiguration {
 
@@ -75,7 +76,7 @@ public class RelauncherConfiguration {
 
     public void save() {
         FILE.getParentFile().mkdirs();
-        try (FileWriter writer = new FileWriter(FILE)) {
+        try (Writer writer = new OutputStreamWriter(new FileOutputStream(FILE), StandardCharsets.UTF_8)) {
             GSON.toJson(this, writer);
         } catch (IOException e) {
             CleanroomRelauncher.LOGGER.error("Unable to save config", e);
