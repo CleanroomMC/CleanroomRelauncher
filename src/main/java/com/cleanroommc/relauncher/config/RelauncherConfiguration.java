@@ -39,7 +39,7 @@ public class RelauncherConfiguration {
     @SerializedName("javaPath")
     private String javaExecutablePath;
     @SerializedName("args")
-    private String javaArguments;
+    private String javaArguments = "";
 
     public String getCleanroomVersion() {
         return cleanroomVersion;
