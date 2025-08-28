@@ -6,20 +6,18 @@
 
 evaluationDependsOn ':mainWrapper'
 
-tasks.named('jar', Jar) {
+tasks.named('jar', Jar).configure {
     archiveClassifier = 'thin'
     dependsOn project(':mainWrapper').tasks.named('generateWrapperHash')
     from {
         project(':mainWrapper').layout.buildDirectory.dir('classes/java/main/com/cleanroommc/relauncher/')
     }
     manifest {
-        attributes(
-                'WrapperHash': project(':mainWrapper').layout.buildDirectory.file('hash.txt').get().asFile.text
-        )
+        attributes('WrapperHash': project(':mainWrapper').layout.buildDirectory.file('hash.txt').map { it.asFile.text })
     }
 }
 
-tasks.named('reobfJar') {
+tasks.named('reobfJar').configure {
     inputJar.set(tasks.named('shadowJar').flatMap({ it.archiveFile }))
 }
 
