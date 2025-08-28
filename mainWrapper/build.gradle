@@ -23,13 +23,15 @@ java {
     }
 }
 
+def wrapper = layout.buildDirectory.file('classes/java/main/com/cleanroommc/relauncher/wrapper/RelaunchMainWrapper.class')
+def hash = layout.buildDirectory.file('hash.txt')
+
 tasks.register('generateWrapperHash') {
     dependsOn classes
-    outputs.file(layout.buildDirectory.file('hash.txt'))
-    doLast {
-        def wrapperFile = layout.buildDirectory.file('classes/java/main/com/cleanroommc/relauncher/wrapper/RelaunchMainWrapper.class').get().asFile
-        def hashFile = layout.buildDirectory.file('hash.txt').get().asFile
+    inputs.file(wrapper)
+    outputs.file(hash)
 
-        hashFile.text = DigestUtils.md5Hex(wrapperFile.newInputStream())
+    doLast {
+        hash.get().asFile.text = DigestUtils.md5Hex(wrapper.get().asFile.newInputStream())
     }
 }
