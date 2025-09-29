@@ -1,5 +1,8 @@
 package com.cleanroommc.relauncher.wrapper;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+
 public class RelaunchMainWrapper {
     public static void main(String[] args) throws Throwable {
         String mainClassName = System.getProperty("cleanroom.relauncher.mainClass");
@@ -12,7 +15,9 @@ public class RelaunchMainWrapper {
         // Parent watcher (Java 9+)
         parentProcess.onExit().thenRun(() -> System.exit(0));
 
-        Class.forName(mainClassName).getMethod("main", String[].class).invoke(null, (Object) args);
+        MethodHandles.lookup()
+            .findStatic(Class.forName(mainClassName), "main", MethodType.methodType(void.class, String[].class))
+            .invoke((Object) args);
     }
 
 }
