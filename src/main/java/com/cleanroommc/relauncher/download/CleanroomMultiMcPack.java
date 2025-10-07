@@ -3,10 +3,8 @@ package com.cleanroommc.relauncher.download;
 import com.cleanroommc.relauncher.download.cache.CleanroomCache;
 
 import java.io.IOException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.*;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 @Deprecated
@@ -34,11 +32,15 @@ public class CleanroomMultiMcPack implements CleanroomZipArtifact {
     @Override
     public void extract(CleanroomCache cache) throws IOException {
         try (FileSystem jar = FileSystems.newFileSystem(this.location, null)) {
-            Files.copy(jar.getPath("/patches/net.minecraft.json"), cache.getMinecraftJson());
-            Files.copy(jar.getPath("/patches/net.minecraftforge.json"), cache.getForgeJson());
-            Files.copy(jar.getPath("/patches/org.lwjgl3.json"), cache.getLwjglVersionJson());
+            Files.copy(jar.getPath("/patches/net.minecraft.json"), cache.getMinecraftJson(), StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(jar.getPath("/patches/net.minecraftforge.json"), cache.getForgeJson(), StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(jar.getPath("/patches/org.lwjgl3.json"), cache.getLwjglVersionJson(), StandardCopyOption.REPLACE_EXISTING);
             try (Stream<Path> stream = Files.walk(jar.getPath("/libraries/"))) {
-                Files.copy(stream.filter(Files::isRegularFile).findFirst().get(), cache.getUniversalJar());
+                // Not valid ever since 0.3.19
+                Optional<Path> universalJar = stream.filter(Files::isRegularFile).findFirst();
+                if (universalJar.isPresent()) {
+                    Files.copy(universalJar.get(), cache.getUniversalJar(), StandardCopyOption.REPLACE_EXISTING);
+                }
             }
         }
     }
