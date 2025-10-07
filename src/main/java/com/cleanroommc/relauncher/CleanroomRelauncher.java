@@ -206,7 +206,7 @@ public class CleanroomRelauncher {
 //        }
 
         if (javaArgs != null && !javaArgs.isEmpty()) {
-            Collections.addAll(arguments, javaArgs.split(" "));
+            Arrays.stream(javaArgs.split(" ")).map(String::trim).forEach(arguments::add);
         }
 
         arguments.add("-Dcleanroom.relauncher.parent=" + ProcessIdUtil.getProcessId());
