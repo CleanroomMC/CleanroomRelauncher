@@ -199,14 +199,19 @@ public class CleanroomRelauncher {
         String fullClassPath = wrapperClassPath + File.pathSeparator + libraryClassPath;
         arguments.add(fullClassPath); // Ensure this is not empty
 
-//        for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
-//            if (!argument.startsWith("-Djava.library.path")) {
-//                arguments.add(argument);
-//            }
-//        }
-
         if (javaArgs != null && !javaArgs.isEmpty()) {
             Arrays.stream(javaArgs.split(" ")).map(String::trim).forEach(arguments::add);
+        }
+
+        for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+            // if (!argument.startsWith("-Djava.library.path")) {
+                if (argument.startsWith("-Xms") && arguments.stream().noneMatch(arg -> arg.startsWith("-Xms"))) {
+                    arguments.add(argument);
+                }
+                if (argument.startsWith("-Xmx") && arguments.stream().noneMatch(arg -> arg.startsWith("-Xmx"))) {
+                    arguments.add(argument);
+                }
+            // }
         }
 
         arguments.add("-Dcleanroom.relauncher.parent=" + ProcessIdUtil.getProcessId());
