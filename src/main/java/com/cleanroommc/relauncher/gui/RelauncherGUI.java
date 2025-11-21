@@ -6,6 +6,7 @@ import com.cleanroommc.javautils.spi.JavaLocator;
 import com.cleanroommc.platformutils.Platform;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.download.CleanroomRelease;
+import com.cleanroommc.relauncher.util.FileDropTarget;
 import net.minecraftforge.fml.cleanroomrelauncher.ExitVMBypass;
 
 import javax.swing.*;
@@ -16,6 +17,8 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileFilter;
 import java.awt.*;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
 import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
@@ -176,7 +179,6 @@ public class RelauncherGUI extends JDialog {
         });
         this.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         this.setAlwaysOnTop(true);
-
         GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
         GraphicsDevice screen = env.getDefaultScreenDevice();
         Rectangle rect = screen.getDefaultConfiguration().getBounds();
@@ -191,8 +193,19 @@ public class RelauncherGUI extends JDialog {
 
         JLabel cleanroomLogo = new JLabel(new ImageIcon(frame.getIconImage().getScaledInstance(80, 80, Image.SCALE_SMOOTH)));
 
-        JPanel cleanroomPickerPanel = this.initializeCleanroomPicker(eligibleReleases);
+        CleanroomPickerPanel cleanroomPickerPanel = new CleanroomPickerPanel(eligibleReleases);
         mainPanel.add(cleanroomPickerPanel);
+
+                new DropTarget(this, DnDConstants.ACTION_COPY_OR_MOVE, new FileDropTarget(
+            (file) -> file.isFile() && (file.getName().endsWith(".jar") || file.getName().endsWith(".zip")),
+            files -> {
+                if (!files.isEmpty()) {
+                    File file = files.get(0);
+                    CleanroomRelease.Snapshot snapshot = CleanroomRelease.Snapshot.of(file);
+                    eligibleReleases.add(snapshot);
+                    cleanroomPickerPanel.updateReleases(eligibleReleases);
+                    CleanroomRelease.saveReleasesToCache(CleanroomRelease.CACHE_FILE, eligibleReleases);
+                }}), true);
 
         JPanel javaPickerPanel = this.initializeJavaPicker();
         mainPanel.add(javaPickerPanel);
@@ -227,49 +240,62 @@ public class RelauncherGUI extends JDialog {
         this.setAutoRequestFocus(true);
     }
 
-    private JPanel initializeCleanroomPicker(List<CleanroomRelease> eligibleReleases) {
-        // Main Panel
-        JPanel cleanroomPicker = new JPanel(new BorderLayout(5, 0));
-        cleanroomPicker.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    private class CleanroomPickerPanel extends JPanel {
 
-        JPanel select = new JPanel();
-        select.setLayout(new BoxLayout(select, BoxLayout.Y_AXIS));
-        cleanroomPicker.add(select);
+        private DefaultComboBoxModel<CleanroomRelease> releasesList;
 
-        // Title label
-        JLabel title = new JLabel("Select Cleanroom Version:");
-        title.setAlignmentX(Component.LEFT_ALIGNMENT);
-        select.add(title);
-        select.add(Box.createRigidArea(new Dimension(0, 5)));
+        public CleanroomPickerPanel(List<CleanroomRelease> eligibleReleases) {
+            super(new BorderLayout(5, 0));
 
-        // Create dropdown panel
-        JPanel dropdown = new JPanel(new BorderLayout(5, 5));
-        dropdown.setAlignmentX(Component.LEFT_ALIGNMENT);
-        select.add(dropdown);
+            JPanel select = new JPanel();
+            select.setLayout(new BoxLayout(select, BoxLayout.Y_AXIS));
+            CleanroomPickerPanel.this.add(select);
 
-        // Create the dropdown with release versions
-        JComboBox<CleanroomRelease> releaseBox = new JComboBox<>();
-        DefaultComboBoxModel<CleanroomRelease> releaseModel = new DefaultComboBoxModel<>();
-        for (CleanroomRelease release : eligibleReleases) {
-            releaseModel.addElement(release);
-        }
-        releaseBox.setModel(releaseModel);
-        releaseBox.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof CleanroomRelease) {
-                    setText(((CleanroomRelease) value).name);
-                }
-                return this;
+             // Title label
+            JLabel title = new JLabel("Select Cleanroom Version:");
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            select.add(title);
+            select.add(Box.createRigidArea(new Dimension(0, 5)));
+
+            // Create dropdown panel
+            JPanel dropdown = new JPanel(new BorderLayout(5, 5));
+            dropdown.setAlignmentX(Component.LEFT_ALIGNMENT);
+            select.add(dropdown);
+
+             // Create the dropdown with release versions
+            JComboBox<CleanroomRelease> releaseBox = new JComboBox<>();
+            DefaultComboBoxModel<CleanroomRelease> releaseModel = CleanroomPickerPanel.this.releasesList = new DefaultComboBoxModel<>();
+            for (CleanroomRelease release : eligibleReleases) {
+                releaseModel.addElement(release);
             }
-        });
-        releaseBox.setSelectedItem(selected);
-        releaseBox.setMaximumRowCount(5);
-        releaseBox.addActionListener(e -> selected = (CleanroomRelease) releaseBox.getSelectedItem());
-        dropdown.add(releaseBox, BorderLayout.CENTER);
+            releaseBox.setModel(releaseModel);
+            releaseBox.setRenderer(new DefaultListCellRenderer() {
+                @Override
+                public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                    super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                    if (value instanceof CleanroomRelease) {
+                        setText(((CleanroomRelease) value).name);
+                    }
+                    return this;
+                }
+            });
+            releaseBox.setSelectedItem(RelauncherGUI.this.selected);
+            releaseBox.setMaximumRowCount(5);
+            releaseBox.addActionListener(e -> RelauncherGUI.this.selected = (CleanroomRelease) releaseBox.getSelectedItem());
+            dropdown.add(releaseBox, BorderLayout.CENTER);
+        }
 
-        return cleanroomPicker;
+        public void addReleases(CleanroomRelease element) {
+            CleanroomPickerPanel.this.releasesList.addElement(element);
+        }
+
+        public void updateReleases(List<CleanroomRelease> eligibleReleases) {
+            CleanroomPickerPanel.this.releasesList.removeAllElements();
+            for (CleanroomRelease release : eligibleReleases) {
+                CleanroomPickerPanel.this.releasesList.addElement(release);
+            }
+        }
+
     }
 
     private JPanel initializeJavaPicker() {
