@@ -270,7 +270,7 @@ public class RelauncherGUI extends JDialog {
                 return this;
             }
         });
-        releaseBox.setSelectedItem(selected);
+        releaseBox.setSelectedItem(eligibleReleases.get(0)); // Pre-select latest release
         releaseBox.setMaximumRowCount(5);
         releaseBox.addActionListener(e -> selected = (CleanroomRelease) releaseBox.getSelectedItem());
         dropdown.add(releaseBox, BorderLayout.CENTER);
@@ -287,7 +287,7 @@ public class RelauncherGUI extends JDialog {
         JPanel selectPanel = new JPanel(new BorderLayout(5, 5));
         selectPanel.setLayout(new BoxLayout(selectPanel, BoxLayout.Y_AXIS));
         JPanel subSelectPanel = new JPanel(new BorderLayout(5, 5));
-        JLabel title = new JLabel("Select Java Executable:");
+        JLabel title = new JLabel("Select Java 21+ Executable:");
         JTextField text = new JTextField(100);
         text.setText(javaPath);
         JPanel northPanel = new JPanel();
