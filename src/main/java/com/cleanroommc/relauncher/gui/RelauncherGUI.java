@@ -19,6 +19,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -475,7 +476,19 @@ public class RelauncherGUI extends JDialog {
         JPanel argsPanel = new JPanel(new BorderLayout(0, 0));
         argsPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        JLabel title = new JLabel("Add Java Arguments:");
+        String linkColor = (CleanroomRelauncher.CONFIG != null && CleanroomRelauncher.CONFIG.isDarkMode()) ? "#6CA3D8" : "blue";
+        JLabel title = new JLabel("<html>Add <u style='color: " + linkColor + "'>Java Arguments</u>:</html>");
+        title.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        title.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URI("https://cleanroommc.com/wiki/end-user-guide/args"));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
         JTextField text = new JTextField(100);
         text.setText(javaArgs);
