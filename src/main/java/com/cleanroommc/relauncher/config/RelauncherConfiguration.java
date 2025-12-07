@@ -7,18 +7,19 @@ import com.google.gson.annotations.SerializedName;
 import net.minecraft.launchwrapper.Launch;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class RelauncherConfiguration {
 
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    public static final File FILE = new File(Launch.minecraftHome, "config/relauncher.json");
+    public static final Path FILE = Launch.minecraftHome.toPath().resolve("config/relauncher.json");
 
     public static RelauncherConfiguration read() {
-        if (!FILE.exists()) {
+        if (Files.notExists(FILE)) {
             return new RelauncherConfiguration();
         }
-        try (Reader reader = new InputStreamReader(new FileInputStream(FILE), StandardCharsets.UTF_8)) {
+        try (Reader reader = Files.newBufferedReader(FILE)) {
             return GSON.fromJson(reader, RelauncherConfiguration.class);
         } catch (IOException e) {
             CleanroomRelauncher.LOGGER.error("Unable to read config", e);
@@ -68,9 +69,11 @@ public class RelauncherConfiguration {
     }
 
     public void save() {
-        FILE.getParentFile().mkdirs();
-        try (Writer writer = new OutputStreamWriter(new FileOutputStream(FILE), StandardCharsets.UTF_8)) {
-            GSON.toJson(this, writer);
+        try {
+            Files.createDirectories(FILE.getParent());
+            try (Writer writer = Files.newBufferedWriter(FILE)) {
+                GSON.toJson(this, writer);
+            }
         } catch (IOException e) {
             CleanroomRelauncher.LOGGER.error("Unable to save config", e);
         }

@@ -11,7 +11,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -87,10 +86,12 @@ public class CleanroomRelease {
      * @throws RuntimeException if an {@link IOException} occurs while writing to the file.
      */
     private static void saveReleasesToCache(Path releaseFile, List<CleanroomRelease> releases) {
-        releaseFile.toFile().getParentFile().mkdirs();
-        try (Writer writer = Files.newBufferedWriter(releaseFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            CleanroomRelauncher.GSON.toJson(releases, writer);
-            CleanroomRelauncher.LOGGER.info("Saved {} releases to cache.", releases.size());
+        try {
+            Files.createDirectories(releaseFile.getParent());
+            try (Writer writer = Files.newBufferedWriter(releaseFile)) {
+                CleanroomRelauncher.GSON.toJson(releases, writer);
+                CleanroomRelauncher.LOGGER.info("Saved {} releases to cache.", releases.size());
+            }
         } catch (IOException e) {
             throw new RuntimeException("Unable to save releases to cache.", e);
         }
