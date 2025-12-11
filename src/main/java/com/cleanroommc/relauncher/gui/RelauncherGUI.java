@@ -19,6 +19,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -218,6 +219,12 @@ public class RelauncherGUI extends JDialog {
 
         this.add(wrapper, BorderLayout.NORTH);
         this.add(relaunchButtonPanel, BorderLayout.SOUTH);
+        
+        // Apply dark mode if enabled
+        if (CleanroomRelauncher.CONFIG != null && CleanroomRelauncher.CONFIG.isDarkMode()) {
+            applyDarkMode(this);
+        }
+        
         float scale = rect.width / 1463f;
         scaleComponent(this, scale);
 
@@ -264,7 +271,7 @@ public class RelauncherGUI extends JDialog {
                 return this;
             }
         });
-        releaseBox.setSelectedItem(selected);
+        releaseBox.setSelectedItem(eligibleReleases.get(0)); // Pre-select latest release
         releaseBox.setMaximumRowCount(5);
         releaseBox.addActionListener(e -> selected = (CleanroomRelease) releaseBox.getSelectedItem());
         dropdown.add(releaseBox, BorderLayout.CENTER);
@@ -281,7 +288,7 @@ public class RelauncherGUI extends JDialog {
         JPanel selectPanel = new JPanel(new BorderLayout(5, 5));
         selectPanel.setLayout(new BoxLayout(selectPanel, BoxLayout.Y_AXIS));
         JPanel subSelectPanel = new JPanel(new BorderLayout(5, 5));
-        JLabel title = new JLabel("Select Java Executable:");
+        JLabel title = new JLabel("Select Java 21+ Executable:");
         JTextField text = new JTextField(100);
         text.setText(javaPath);
         JPanel northPanel = new JPanel();
@@ -330,9 +337,10 @@ public class RelauncherGUI extends JDialog {
         options.setLayout(new BoxLayout(options, BoxLayout.X_AXIS));
         options.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         selectPanel.add(options);
-        // JButton download = new JButton("Download");
+        JButton downloadJava = new JButton("Download Java");
         JButton autoDetect = new JButton("Auto-Detect");
         JButton test = new JButton("Test");
+        options.add(downloadJava);
         options.add(autoDetect);
         options.add(test);
 
@@ -370,6 +378,27 @@ public class RelauncherGUI extends JDialog {
             int result = fileChooser.showOpenDialog(this);
             if (result == JFileChooser.APPROVE_OPTION) {
                 text.setText(fileChooser.getSelectedFile().getAbsolutePath());
+            }
+        });
+
+        downloadJava.addActionListener(e -> {
+            String downloadUrl = "https://adoptium.net/temurin/releases/?version=25";
+            try {
+                if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                    Desktop.getDesktop().browse(new java.net.URI(downloadUrl));
+                } else {
+                    // Fallback: show dialog with link
+                    JOptionPane.showMessageDialog(this, 
+                        "Please download Java 21 or later from:\n" + downloadUrl,
+                        "Download Java", 
+                        JOptionPane.INFORMATION_MESSAGE);
+                }
+            } catch (Exception ex) {
+                CleanroomRelauncher.LOGGER.error("Failed to open browser", ex);
+                JOptionPane.showMessageDialog(this, 
+                    "Please download Java 21 or later from:\n" + downloadUrl,
+                    "Download Java", 
+                    JOptionPane.INFORMATION_MESSAGE);
             }
         });
 
@@ -447,7 +476,19 @@ public class RelauncherGUI extends JDialog {
         JPanel argsPanel = new JPanel(new BorderLayout(0, 0));
         argsPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        JLabel title = new JLabel("Add Java Arguments:");
+        String linkColor = (CleanroomRelauncher.CONFIG != null && CleanroomRelauncher.CONFIG.isDarkMode()) ? "#6CA3D8" : "blue";
+        JLabel title = new JLabel("<html>Add <u style='color: " + linkColor + "'>Java Arguments</u>:</html>");
+        title.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        title.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URI("https://cleanroommc.com/wiki/end-user-guide/args"));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
         JTextField text = new JTextField(100);
         text.setText(javaArgs);
@@ -516,6 +557,40 @@ public class RelauncherGUI extends JDialog {
                 text.setBorder(null);
             }
         });
+    }
+
+    private void applyDarkMode(Container container) {
+        Color bg = new Color(0x2b2b2b);
+        Color fg = new Color(0xe0e0e0);
+        Color inputBg = new Color(0x3c3f41);
+        Color buttonBg = new Color(0x4e5254);
+        
+        applyDarkModeRecursive(container, bg, fg, inputBg, buttonBg);
+    }
+    
+    private void applyDarkModeRecursive(Component component, Color bg, Color fg, Color inputBg, Color buttonBg) {
+        if (component instanceof JPanel) {
+            component.setBackground(bg);
+        } else if (component instanceof JLabel) {
+            component.setBackground(bg);
+            component.setForeground(fg);
+        } else if (component instanceof JTextField) {
+            component.setBackground(inputBg);
+            component.setForeground(fg);
+            ((JTextField) component).setCaretColor(fg);
+        } else if (component instanceof JButton) {
+            component.setBackground(buttonBg);
+            component.setForeground(fg);
+        } else if (component instanceof JComboBox) {
+            component.setBackground(inputBg);
+            component.setForeground(fg);
+        }
+        
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                applyDarkModeRecursive(child, bg, fg, inputBg, buttonBg);
+            }
+        }
     }
 
     private Runnable testJavaAndReturn() {

@@ -35,6 +35,8 @@ public class RelauncherConfiguration {
     private String javaExecutablePath;
     @SerializedName("args")
     private String javaArguments = "";
+    @SerializedName("darkMode")
+    private boolean darkMode = true;
 
     public String getCleanroomVersion() {
         return cleanroomVersion;
@@ -52,6 +54,10 @@ public class RelauncherConfiguration {
         return javaArguments;
     }
 
+    public boolean isDarkMode() {
+        return darkMode;
+    }
+
     public void setCleanroomVersion(String cleanroomVersion) {
         this.cleanroomVersion = cleanroomVersion;
     }
@@ -66,6 +72,10 @@ public class RelauncherConfiguration {
 
     public void setJavaArguments(String javaArguments) {
         this.javaArguments = javaArguments;
+    }
+
+    public void setDarkMode(boolean darkMode) {
+        this.darkMode = darkMode;
     }
 
     public void save() {

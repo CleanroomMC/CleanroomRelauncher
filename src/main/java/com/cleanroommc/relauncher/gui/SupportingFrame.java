@@ -7,7 +7,7 @@ class SupportingFrame extends JFrame {
     SupportingFrame(String title, ImageIcon icon) {
         super(title);
         this.setUndecorated(true);
-        this.setVisible(true);
+        this.setVisible(false);
         this.setLocationRelativeTo(null);
         this.setIconImage(icon.getImage());
     }
