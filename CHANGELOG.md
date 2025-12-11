@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.2] - 2025-12-11
+
+### Fixed
+- Issues with file paths on some systems and locales
+- Stop scanning the entirety of `/opt` on Linux (updated JavaUtils to 1.1.5)
+
 ## [0.3.1] - 2025-10-08
 
 ### Added
