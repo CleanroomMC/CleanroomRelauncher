@@ -37,7 +37,7 @@ public class RelauncherEntryPoint implements IFMLLoadingPlugin {
 
     @Override
     public void injectData(Map<String, Object> data) {
-        source = (File) data.get("location");
+        source = (File) data.get("coremodLocation");
     }
 
     @Override
