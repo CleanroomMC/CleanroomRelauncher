@@ -6,9 +6,9 @@ import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 import javax.annotation.Nullable;
 import java.util.Map;
 
-public class CleanroomEntrypoint implements IFMLLoadingPlugin {
+public class RelauncherEntryPoint implements IFMLLoadingPlugin {
 
-    public CleanroomEntrypoint() {
+    public RelauncherEntryPoint() {
         if (FMLLaunchHandler.side().isClient()) {
             CleanroomRelauncher.run();
         } else {

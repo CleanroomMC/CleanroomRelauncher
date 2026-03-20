@@ -7,6 +7,9 @@ import com.cleanroommc.relauncher.download.CleanroomRelease;
 import com.cleanroommc.relauncher.download.cache.CleanroomCache;
 import com.cleanroommc.relauncher.download.schema.Version;
 import com.cleanroommc.relauncher.gui.RelauncherGUI;
+import com.cleanroommc.relauncher.util.enums.ArgsEnum;
+import com.cleanroommc.relauncher.util.enums.JavaTargetsEnum;
+import com.cleanroommc.relauncher.util.enums.VendorsEnum;
 import com.google.gson.Gson;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraftforge.fml.cleanroomrelauncher.ExitVMBypass;
@@ -16,13 +19,17 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.util.ProcessIdUtil;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.nio.file.*;
 import java.util.*;
 import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static com.cleanroommc.relauncher.download.JavaProvisioning.validateOrProvisionJava;
 
 public class CleanroomRelauncher {
 
@@ -147,6 +154,10 @@ public class CleanroomRelauncher {
         String notedLatestVersion = CONFIG.getLatestCleanroomVersion();
         String javaPath = CONFIG.getJavaExecutablePath();
         String javaArgs = CONFIG.getJavaArguments();
+        JavaTargetsEnum javaTarget = CONFIG.getJavaTarget();
+        VendorsEnum javaVendor = CONFIG.getJavaVendor();
+        boolean autoSetup = CONFIG.getAutoSetup();
+        boolean relauncherEnabled = CONFIG.getRelauncherEnabled();
         boolean needsNotifyLatest = notedLatestVersion == null || !notedLatestVersion.equals(latestRelease.name);
         if (selectedVersion != null) {
             selected = releases.stream().filter(cr -> cr.name.equals(selectedVersion)).findFirst().orElse(null);
@@ -154,98 +165,222 @@ public class CleanroomRelauncher {
         if (javaPath != null && !new File(javaPath).isFile()) {
             javaPath = null;
         }
+        if (javaTarget == null) {
+            javaTarget = JavaTargetsEnum.J25;
+        }
+        if (javaVendor == null) {
+            javaVendor = VendorsEnum.AZUL_ZULU;
+        }
 //        if (javaArgs == null) {
 //            javaArgs = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
 //        }
-        if (selected == null || javaPath == null || needsNotifyLatest) {
-            final CleanroomRelease fSelected = selected;
-            final String fJavaPath = javaPath;
-            final String fJavaArgs = javaArgs;
-            RelauncherGUI gui = RelauncherGUI.show(releases, $ -> {
-                $.selected = fSelected;
-                $.javaPath = fJavaPath;
-                $.javaArgs = fJavaArgs;
-            });
+        if (relauncherEnabled) {
+            if (!autoSetup && (selected == null || javaPath == null || needsNotifyLatest)) {
+                final String fJavaPath = javaPath;
+                final String fJavaArgs = javaArgs;
+                final VendorsEnum fJavaVendor = javaVendor;
+                final JavaTargetsEnum fJavaTarget = javaTarget;
+                final CleanroomRelease fSelected = selected;
+                final boolean fAutoSetup = autoSetup;
+                while(javaPath == null || Objects.equals(javaPath, "")){
+                    RelauncherGUI gui = RelauncherGUI.show(releases, $ -> {
+                        $.selected = fSelected;
+                        $.javaPath = fJavaPath;
+                        $.targetSelected = fJavaTarget;
+                        $.vendorSelected = fJavaVendor;
+                        $.javaArgs = fJavaArgs;
+                        $.autoSetup = fAutoSetup;
+                        $.shouldScale=(!isJvm8());
+                    });
 
-            selected = gui.selected;
-            javaPath = gui.javaPath;
-            javaArgs = gui.javaArgs;
+                    if (gui.selected != null) {
+                        selected = gui.selected;
+                    } else{
+                        selected = latestRelease;
+                    }
+                    javaPath = gui.javaPath;
+                    javaArgs = gui.javaArgs;
+                    javaTarget = gui.targetSelected;
+                    javaVendor = gui.vendorSelected;
+                    autoSetup = gui.autoSetup;
 
-            CONFIG.setCleanroomVersion(selected.name);
-            CONFIG.setLatestCleanroomVersion(latestRelease.name);
-            CONFIG.setJavaExecutablePath(javaPath);
-            CONFIG.setJavaArguments(javaArgs);
+                    javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
+                }
 
-            CONFIG.save();
-        }
+                CONFIG.setCleanroomVersion(selected.name);
+                CONFIG.setLatestCleanroomVersion(latestRelease.name);
+                CONFIG.setJavaExecutablePath(javaPath);
+                CONFIG.setJavaArguments(javaArgs);
+                CONFIG.setTargetVendor(javaVendor);
+                CONFIG.setTargetJavaVersion(javaTarget);
+                CONFIG.setAutoSetup(autoSetup);
 
-        CleanroomCache releaseCache = CleanroomCache.of(selected);
+                CONFIG.save();
+            }
+            if(autoSetup){
+                if(needsNotifyLatest) {
+                    selected = latestRelease;
+                    CONFIG.setCleanroomVersion(selected.name);
+                    CONFIG.setLatestCleanroomVersion(latestRelease.name);
+                }
+                javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
+                while(Objects.equals(javaPath, "")){
+                    final String fJavaPath = javaPath;
+                    final String fJavaArgs = javaArgs;
+                    final VendorsEnum fJavaVendor = VendorsEnum.AZUL_ZULU;
+                    final JavaTargetsEnum fJavaTarget = JavaTargetsEnum.J25;
+                    final CleanroomRelease fSelected = selected;
+                    final boolean fAutoSetup = autoSetup;
+                    RelauncherGUI gui = RelauncherGUI.show(releases, $ -> {
+                        $.selected = fSelected;
+                        $.javaPath = fJavaPath;
+                        $.targetSelected = fJavaTarget;
+                        $.vendorSelected = fJavaVendor;
+                        $.javaArgs = fJavaArgs;
+                        $.autoSetup = fAutoSetup;
+                        $.shouldScale=(isJvm8());
+                    });
 
-        LOGGER.info("Preparing Cleanroom v{} and its libraries...", selected.name);
-        List<Version> versions = versions(releaseCache);
+                    if (gui.selected != null) {
+                        selected = gui.selected;
+                    } else{
+                        selected = latestRelease;
+                    }
+                    javaPath = gui.javaPath;
+                    javaArgs = gui.javaArgs;
+                    javaTarget = gui.targetSelected;
+                    javaVendor = gui.vendorSelected;
+                    autoSetup = gui.autoSetup;
 
-        String wrapperClassPath = getOrExtract();
+                    javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
+                    if (!javaPath.isEmpty()){
+                        CONFIG.setTargetJavaVersion(javaTarget);
+                        CONFIG.setTargetVendor(javaVendor);
+                    }
+                }
+                CONFIG.setJavaExecutablePath(javaPath);
+                LOGGER.warn("Setting the rest");
+                if (javaArgs == null || javaArgs.isEmpty()) {
+                    StringBuilder argBuilder = new StringBuilder();
+                    if (javaTarget.getInternalNameInt()< 25 ) {
+                        argBuilder.append(ArgsEnum.UnlockExperimentalOptions.getArg()).append(" ");
+                    }
+                    argBuilder.append(ArgsEnum.CompactObjectHeaders.getArg()).append(" ");
+                    javaArgs = argBuilder.toString();
+                }
+                CONFIG.setJavaArguments(javaArgs);
+                if (javaTarget == null){
+                    javaTarget=JavaTargetsEnum.J25;
+                    CONFIG.setTargetJavaVersion(javaTarget);
+                }
+                if (javaVendor == null){
+                    javaVendor=VendorsEnum.AZUL_ZULU;
+                    CONFIG.setTargetVendor(javaVendor);
+                }
+                CONFIG.save();
 
-        LOGGER.info("Preparing to relaunch Cleanroom v{}", selected.name);
-        List<String> arguments = new ArrayList<>();
-        arguments.add(javaPath);
 
-        arguments.add("-cp");
-        String libraryClassPath = versions.stream()
-                .map(version -> version.libraryPaths)
-                .flatMap(Collection::stream)
-                .collect(Collectors.joining(File.pathSeparator));
+            }
 
-        String fullClassPath = wrapperClassPath + File.pathSeparator + libraryClassPath;
-        arguments.add(fullClassPath); // Ensure this is not empty
+            CleanroomCache releaseCache = CleanroomCache.of(selected);
 
-        if (javaArgs != null && !javaArgs.isEmpty()) {
-            Arrays.stream(javaArgs.split(" ")).map(String::trim).forEach(arguments::add);
-        }
+            LOGGER.info("Preparing Cleanroom v{} and its libraries...", selected.name);
+            List<Version> versions = versions(releaseCache);
 
-        for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
-            // if (!argument.startsWith("-Djava.library.path")) {
+            String wrapperClassPath = getOrExtract();
+
+            LOGGER.info("Preparing to relaunch Cleanroom v{}", selected.name);
+            List<String> arguments = new ArrayList<>();
+            arguments.add(javaPath);
+
+            arguments.add("-cp");
+            String libraryClassPath = versions.stream()
+                    .map(version -> version.libraryPaths)
+                    .flatMap(Collection::stream)
+                    .collect(Collectors.joining(File.pathSeparator));
+
+            String fullClassPath = wrapperClassPath + File.pathSeparator + libraryClassPath;
+            arguments.add(fullClassPath); // Ensure this is not empty
+
+            if (javaArgs != null && !javaArgs.isEmpty()) {
+                Arrays.stream(javaArgs.split(" ")).map(String::trim).forEach(arguments::add);
+            }
+
+            for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+                // if (!argument.startsWith("-Djava.library.path")) {
                 if (argument.startsWith("-Xms") && arguments.stream().noneMatch(arg -> arg.startsWith("-Xms"))) {
                     arguments.add(argument);
                 }
                 if (argument.startsWith("-Xmx") && arguments.stream().noneMatch(arg -> arg.startsWith("-Xmx"))) {
                     arguments.add(argument);
                 }
-            // }
+                // }
+            }
+
+            arguments.add("-Dcleanroom.relauncher.parent=" + ProcessIdUtil.getProcessId());
+            arguments.add("-Dcleanroom.relauncher.mainClass=" + versions.get(0).mainClass);
+            arguments.add("-Djava.library.path=" + versions.stream().map(version -> version.nativesPaths).flatMap(Collection::stream).collect(Collectors.joining(File.pathSeparator)));
+
+            arguments.add("com.cleanroommc.relauncher.wrapper.RelaunchMainWrapper");
+
+            // Forward any extra game launch arguments
+            for (Map.Entry<String, String> launchArgument : ((Map<String, String>) Launch.blackboard.get("launchArgs")).entrySet()) {
+                arguments.add(launchArgument.getKey());
+                arguments.add(launchArgument.getValue());
+            }
+
+            arguments.add("--tweakClass");
+            arguments.add("net.minecraftforge.fml.common.launcher.FMLTweaker"); // Fixme, gather from Version?
+
+            LOGGER.debug("Relauncher arguments:");
+            for (String arg: arguments) {
+                LOGGER.debug(arg);
+            }
+
+            ProcessBuilder processBuilder = new ProcessBuilder(arguments);
+            processBuilder.directory(null);
+            processBuilder.inheritIO();
+
+            try {
+                Process process = processBuilder.start();
+
+                int exitCode = process.waitFor();
+                LOGGER.info("Process exited with code: {}", exitCode);
+                ExitVMBypass.exit(exitCode);
+            } catch (IOException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         }
-
-        arguments.add("-Dcleanroom.relauncher.parent=" + ProcessIdUtil.getProcessId());
-        arguments.add("-Dcleanroom.relauncher.mainClass=" + versions.get(0).mainClass);
-        arguments.add("-Djava.library.path=" + versions.stream().map(version -> version.nativesPaths).flatMap(Collection::stream).collect(Collectors.joining(File.pathSeparator)));
-
-        arguments.add("com.cleanroommc.relauncher.wrapper.RelaunchMainWrapper");
-
-        // Forward any extra game launch arguments
-        for (Map.Entry<String, String> launchArgument : ((Map<String, String>) Launch.blackboard.get("launchArgs")).entrySet()) {
-            arguments.add(launchArgument.getKey());
-            arguments.add(launchArgument.getValue());
-        }
-
-        arguments.add("--tweakClass");
-        arguments.add("net.minecraftforge.fml.common.launcher.FMLTweaker"); // Fixme, gather from Version?
-
-        LOGGER.debug("Relauncher arguments:");
-        for (String arg: arguments) {
-            LOGGER.debug(arg);
-        }
-
-        ProcessBuilder processBuilder = new ProcessBuilder(arguments);
-        processBuilder.directory(null);
-        processBuilder.inheritIO();
-
+    }
+    public static boolean isJvm8(){
+        // Detect current JVM
+        int currentJavaMajorVersion = 8;
         try {
-            Process process = processBuilder.start();
-
-            int exitCode = process.waitFor();
-            LOGGER.info("Process exited with code: {}", exitCode);
-            ExitVMBypass.exit(exitCode);
-        } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+            String version = System.getProperty("java.version");
+            if (version.startsWith("1.")) {
+                currentJavaMajorVersion = Integer.parseInt(version.split("\\.")[1]);
+            } else {
+                currentJavaMajorVersion = Integer.parseInt(version.split("\\.")[0]);
+            }
+        } catch (Exception ignored) {}
+        // J8 messes up scaling it seems
+        return currentJavaMajorVersion == 8;
+    }
+    public static boolean isJvm8Oracle(){
+        // Detect current JVM
+        int currentJavaMajorVersion = 8;
+        String vendor="";
+        try {
+            vendor = System.getProperty("java.vendor");
+            String version = System.getProperty("java.version");
+            if (version.startsWith("1.")) {
+                currentJavaMajorVersion = Integer.parseInt(version.split("\\.")[1]);
+            } else {
+                currentJavaMajorVersion = Integer.parseInt(version.split("\\.")[0]);
+            }
+        } catch (Exception ignored) {}
+        // J8 messes up scaling it seems
+        boolean isOracle = vendor != null && vendor.toLowerCase(Locale.ENGLISH).contains("oracle");
+        return currentJavaMajorVersion == 8 && isOracle;
     }
 }

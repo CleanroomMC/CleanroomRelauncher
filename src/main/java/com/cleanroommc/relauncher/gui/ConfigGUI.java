@@ -11,9 +11,9 @@ import com.cleanroommc.relauncher.util.enums.ArgsEnum;
 import com.cleanroommc.relauncher.util.enums.IDisplayableEnum;
 import com.cleanroommc.relauncher.util.enums.JavaTargetsEnum;
 import com.cleanroommc.relauncher.util.enums.VendorsEnum;
-import net.minecraftforge.fml.cleanroomrelauncher.ExitVMBypass;
 
 import javax.swing.*;
+import javax.swing.Timer;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
@@ -23,22 +23,17 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static com.cleanroommc.relauncher.CleanroomRelauncher.isJvm8;
-import static com.cleanroommc.relauncher.CleanroomRelauncher.isJvm8Oracle;
 
-public class RelauncherGUI extends JDialog {
+public class ConfigGUI extends JDialog {
 
     static {
-        System.setProperty("awt.useSystemAAFontSettings","on");
-        System.setProperty("swing.aatext", "true");
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ignore) { }
@@ -51,9 +46,9 @@ public class RelauncherGUI extends JDialog {
         for (String key : fontKeys) {
             UIManager.put(key, baseFont);
         }
-
+        System.setProperty("awt.useSystemAAFontSettings","on");
+        System.setProperty("swing.aatext", "true");
     }
-
     private static void scaleComponent(Component component, float scale) {
         // scaling rect
         if (component instanceof JTextField ||
@@ -159,18 +154,16 @@ public class RelauncherGUI extends JDialog {
             }
         }
     }
-
-    public static RelauncherGUI show(List<CleanroomRelease> eligibleReleases, Consumer<RelauncherGUI> consumer) {
-        ImageIcon imageIcon = new ImageIcon(Toolkit.getDefaultToolkit().getImage(RelauncherGUI.class.getResource("/cleanroom-relauncher.png")));
-        return new RelauncherGUI(new SupportingFrame("Cleanroom Relaunch Configuration", imageIcon), eligibleReleases, consumer);
+    public static ConfigGUI show(List<CleanroomRelease> eligibleReleases, Consumer<ConfigGUI> consumer) {
+        ImageIcon imageIcon = new ImageIcon(Toolkit.getDefaultToolkit().getImage(ConfigGUI.class.getResource("/cleanroom-relauncher.png")));
+        return new ConfigGUI(new SupportingFrame("Cleanroom Configuration", imageIcon), eligibleReleases, consumer);
     }
 
     public CleanroomRelease selected;
-    public JavaTargetsEnum targetSelected = JavaTargetsEnum.J25;
-    public VendorsEnum vendorSelected = VendorsEnum.AZUL_ZULU;
-    public String javaPath, javaArgs;
     public boolean autoSetup;
-    public boolean shouldScale;
+    public JavaTargetsEnum targetSelected;
+    public VendorsEnum vendorSelected;
+    public String javaPath, javaArgs;
     private static HashSet<ArgsEnum> args = new HashSet<>();
     public void updateJavaArgs() {
         StringBuilder argBuilder = new StringBuilder();
@@ -211,40 +204,59 @@ public class RelauncherGUI extends JDialog {
     }
 
     private final JFrame frame;
-    private final CardLayout cardLayout = new CardLayout();
-    private final JPanel cards = new JPanel(cardLayout);
+    private ConfigGUI(SupportingFrame frame, List<CleanroomRelease> eligibleReleases, Consumer<ConfigGUI> consumer) {
+        super(frame, frame.getTitle(), true);
+        this.frame = frame;
 
-    private JPanel createStartScreen() {
-        //Fast Relaunch Panel
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        consumer.accept(this);
 
-        JLabel logo = new JLabel(new ImageIcon(frame.getIconImage().getScaledInstance(160, 160, Image.SCALE_SMOOTH)));
-        logo.setAlignmentX(Component.CENTER_ALIGNMENT);
-        logo.setBorder(new EmptyBorder(50, 0, 50, 0));
+        this.setIconImage(frame.getIconImage());
 
-        JButton fastRelaunchBtn = new JButton("Relaunch Now");
-        fastRelaunchBtn.addActionListener(e -> {
-            autoSetup = true;
-            frame.dispose();
+        this.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                ConfigGUI.this.requestFocusInWindow();
+            }
         });
-        JButton advancedBtn = new JButton("Advanced Settings");
 
-        fastRelaunchBtn.setFont(fastRelaunchBtn.getFont().deriveFont(Font.BOLD, 14f));
-        this.getRootPane().setDefaultButton(fastRelaunchBtn);
+        this.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                selected = null;
+                frame.dispose();
 
-        advancedBtn.addActionListener(e -> cardLayout.show(cards, "ADVANCED"));
+                CleanroomRelauncher.LOGGER.info("ConfigurationChange button was cancelled.");
+            }
+        });
+        this.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        this.setAlwaysOnTop(true);
 
-        JPanel btnBox = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 0));
-        btnBox.add(fastRelaunchBtn);
-        btnBox.add(advancedBtn);
-        panel.add(logo);
-        panel.add(btnBox);
+        GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        GraphicsDevice screen = env.getDefaultScreenDevice();
+        Rectangle rect = screen.getDefaultConfiguration().getBounds();
+        int width = (int) (rect.width / 3.25f);//Changed values to accommodate for new GUI
+        int height = (int) (width / 0.95f);
+        int x = (rect.width - width) / 2;
+        int y = (rect.height - height) / 2;
+        this.setLocation(x, y);
 
-        return panel;
+        JPanel configScreen = ConfigScreen(eligibleReleases);
+
+
+        this.add(configScreen);
+        this.revalidate();
+        float scale = rect.width / 1463f;
+        if (isJvm8()){
+            scale = scale/1.5f;
+        }
+        scaleComponent(this, scale);
+
+        this.pack();
+        this.setSize(width, height);
+        this.setVisible(true);
+        this.setAutoRequestFocus(true);
     }
-
-    private JPanel createAdvancedScreen(List<CleanroomRelease> releases) {
+    private JPanel ConfigScreen(List<CleanroomRelease> releases) {
         JPanel container = new JPanel(new BorderLayout());
 
 
@@ -269,65 +281,6 @@ public class RelauncherGUI extends JDialog {
 
         return container;
     }
-    private RelauncherGUI(SupportingFrame frame, List<CleanroomRelease> eligibleReleases, Consumer<RelauncherGUI> consumer) {
-        super(frame, frame.getTitle(), true);
-        this.frame = frame;
-
-        consumer.accept(this);
-
-        this.setIconImage(frame.getIconImage());
-
-        this.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                RelauncherGUI.this.requestFocusInWindow();
-            }
-        });
-
-        this.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                selected = null;
-                frame.dispose();
-
-                CleanroomRelauncher.LOGGER.info("No Cleanroom releases were selected, instance is dismissed.");
-                ExitVMBypass.exit(0);
-            }
-        });
-        this.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        this.setAlwaysOnTop(true);
-        GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
-        GraphicsDevice screen = env.getDefaultScreenDevice();
-        Rectangle rect = screen.getDefaultConfiguration().getBounds();
-        int width = (int) (rect.width / 3.25f);//Changed values to accommodate for new GUI
-        int height = (int) (width / 0.95f);
-        if (isJvm8Oracle()) {
-            height = (int) (height * 1.1f); // increase height on Oracle JDK 8, messes up scaling
-        }
-        int x = (rect.width - width) / 2;
-        int y = (rect.height - height) / 2;
-        this.setLocation(x, y);
-
-        JPanel startCard = createStartScreen();
-        JPanel advancedCard = createAdvancedScreen(eligibleReleases);
-
-        cards.add(startCard, "START");
-        cards.add(advancedCard, "ADVANCED");
-
-
-        this.add(cards);
-        float scale = rect.width / 1463f;
-        if (shouldScale) {
-            scale = scale/1.5f;
-        }
-        scaleComponent(this, scale);
-
-        this.pack();
-        this.setSize(width, height);
-        this.setVisible(true);
-        this.setAutoRequestFocus(true);
-    }
-
     private JPanel initializeCleanroomPicker(List<CleanroomRelease> eligibleReleases) {
         // Main Panel
         JPanel cleanroomPicker = new JPanel(new BorderLayout(5, 0));
@@ -423,25 +376,14 @@ public class RelauncherGUI extends JDialog {
         return panel;
     }
     private JPanel initializeJavaPicker() {
-        // Scale back up
-        GraphicsConfiguration gc = GraphicsEnvironment.getLocalGraphicsEnvironment()
-                .getDefaultScreenDevice().getDefaultConfiguration();
-        Rectangle rect = gc.getBounds();
-        float scale = rect.width / 1463f;
-        final float finalScale = (isJvm8() && !isJvm8Oracle()) ? scale : 1.0f;
         // Main Panel
         JPanel javaPicker = new JPanel(new BorderLayout(5, 0));
         javaPicker.setLayout(new BoxLayout(javaPicker, BoxLayout.Y_AXIS));
         javaPicker.setBorder(BorderFactory.createEmptyBorder(20, 10, 0, 10));
 
-        // Radio buttons
-        // TODO: Size mismatch between buttons
-        JToggleButton simplifiedBtn = new JToggleButton("Automatic Install", true);
-        JToggleButton manualBtn = new JToggleButton("Manual Selection");
-        if (isJvm8() && !isJvm8Oracle()) {
-            simplifiedBtn.setFont(new Font("Arial", Font.PLAIN, 18));
-            manualBtn.setFont(new Font("Arial", Font.PLAIN, 18));
-        }
+        // Toggle buttons
+        JToggleButton simplifiedBtn = new JToggleButton("Automatic Setup", autoSetup);
+        JToggleButton manualBtn = new JToggleButton("Manual Setup", !autoSetup);
 
         ButtonGroup group = new ButtonGroup();
         group.add(simplifiedBtn);
@@ -452,12 +394,6 @@ public class RelauncherGUI extends JDialog {
         radioPanel.setLayout(new BoxLayout(radioPanel, BoxLayout.X_AXIS));
         radioPanel.add(simplifiedBtn);
         radioPanel.add(manualBtn);
-        radioPanel.setBorder(BorderFactory.createEmptyBorder(0,0,5,0));
-        if (isJvm8()  && !isJvm8Oracle()) {
-            scaleComponent(simplifiedBtn, scale);
-            scaleComponent(manualBtn, scale);
-            scaleComponent(radioPanel, scale/1.2f);
-        }
         javaPicker.add(radioPanel);
 
         JPanel switchableContainer = new JPanel(new BorderLayout());
@@ -534,6 +470,7 @@ public class RelauncherGUI extends JDialog {
         options.setLayout(new BoxLayout(options, BoxLayout.X_AXIS));
         options.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         selectPanel.add(options);
+
         // Switch
         ActionListener switchAction = e -> {
             switchableContainer.removeAll();
@@ -544,17 +481,9 @@ public class RelauncherGUI extends JDialog {
                 if (targetSelected == null){
                     targetSelected=JavaTargetsEnum.J25;
                 }
-                if (targetPanels.getClientProperty("scaled") == null) {
-                    scaleComponent(targetPanels, finalScale);
-                    targetPanels.putClientProperty("scaled", Boolean.TRUE);
-                }
                 switchableContainer.add(targetPanels);
                 autoSetup = true;
             } else {
-                if (selectPanel.getClientProperty("scaled") == null) {
-                    scaleComponent(selectPanel, finalScale);
-                    selectPanel.putClientProperty("scaled", Boolean.TRUE);
-                }
                 switchableContainer.add(selectPanel);
                 autoSetup = false;
             }
@@ -569,13 +498,13 @@ public class RelauncherGUI extends JDialog {
         if (autoSetup) {
             switchableContainer.add(targetPanels);
             simplifiedBtn.setSelected(true);
-            targetPanels.putClientProperty("scaled", Boolean.TRUE);
         }else{
             switchableContainer.add(selectPanel);
             manualBtn.setSelected(true);
-            selectPanel.putClientProperty("scaled", Boolean.TRUE);
         }
         switchableContainer.revalidate();
+        switchableContainer.repaint();
+
         // JButton download = new JButton("Download");
         JButton autoDetect = new JButton("Auto-Detect");
         JButton test = new JButton("Test");
@@ -669,7 +598,7 @@ public class RelauncherGUI extends JDialog {
                 protected void done() {
                     timer.stop();
                     autoDetect.setText(original);
-                    JOptionPane.showMessageDialog(RelauncherGUI.this, javaInstalls.size() + " Java 21+ Installs Found!", "Auto-Detection Finished", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(ConfigGUI.this, javaInstalls.size() + " Java 21+ Installs Found!", "Auto-Detection Finished", JOptionPane.INFORMATION_MESSAGE);
                     autoDetect.setEnabled(true);
 
                     if (!javaInstalls.isEmpty()) {
@@ -687,7 +616,6 @@ public class RelauncherGUI extends JDialog {
 
         return javaPicker;
     }
-
     private JPanel initializeArgsPanel() {
 
         // Main Panel
@@ -710,7 +638,7 @@ public class RelauncherGUI extends JDialog {
         argsPickerPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         // When arg checkbox is active, run SyncTextField
         Runnable syncTextField = () -> {
-            boolean hasSelectedOptions = !args.isEmpty();
+            boolean hasSelectedOptions = args!=null && !args.isEmpty();
             text.setEditable(!hasSelectedOptions);
             text.setEnabled(!hasSelectedOptions);
             text.setText(javaArgs);
@@ -725,19 +653,13 @@ public class RelauncherGUI extends JDialog {
                 JCheckBox checkBox = new JCheckBox();
 
                 boolean isPresentInArgs = RelauncherConfiguration.read().argsContain(arg);
-                checkBox.setSelected(isPresentInArgs || arg.isSelectedByDefault());
+                checkBox.setSelected(isPresentInArgs);
                 if (javaArgsSupplied){
                     checkBox.setSelected(isPresentInArgs);
                     if (isPresentInArgs){
                         args.add(arg);
                     }
                     syncTextField.run();
-                } else {
-                    if(arg.isSelectedByDefault()) {
-                        args.add(arg);
-                        updateJavaArgs();
-                        syncTextField.run();
-                    }
                 }
                 checkBox.addItemListener(e -> {
                     if (e.getStateChange() == ItemEvent.SELECTED) {
@@ -770,35 +692,26 @@ public class RelauncherGUI extends JDialog {
 
         return argsPanel;
     }
-    private JPanel initializeRelaunchPanel() {
-        JPanel relaunchButtonPanel = new JPanel();
 
-        JButton relaunchButton = new JButton("Relaunch with Cleanroom");
-        relaunchButtonPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-        relaunchButton.addActionListener(e -> {
+    private JPanel initializeRelaunchPanel() {
+        JPanel configButtonPanel = new JPanel();
+
+        JButton configSaveButton = new JButton("Save Settings");
+        configButtonPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        configSaveButton.addActionListener(e -> {
             if (selected == null) {
                 JOptionPane.showMessageDialog(this, "Please select a Cleanroom version in order to relaunch.", "Cleanroom Release Not Selected", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            if (autoSetup) {
-                if (vendorSelected==null) {
-                    vendorSelected = VendorsEnum.AZUL_ZULU;
-                }
-                if (targetSelected==null) {
-                    targetSelected = JavaTargetsEnum.J25;
-                }
+            if (javaPath == null) {
+                JOptionPane.showMessageDialog(this, "Please provide a valid Java Executable in order to relaunch.", "Java Executable Not Selected", JOptionPane.ERROR_MESSAGE);
+                return;
             }
-            if (!autoSetup) {
-                if (javaPath == null) {
-                    JOptionPane.showMessageDialog(this, "Please provide a valid Java Executable in order to relaunch.", "Java Executable Not Selected", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-                Runnable test = this.testJavaAndReturn();
-                if (test != null) {
-                    test.run();
-                    return;
-                }
-                // Force verifying path against no target
+            if (autoSetup && (targetSelected == null || vendorSelected == null)) {
+                JOptionPane.showMessageDialog(this, "Please select a valid Java target/vendor in order to relaunch.", "Java Target/Vendor Not Selected", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            if (!autoSetup){
                 vendorSelected = null;
                 targetSelected = null;
             }
@@ -807,11 +720,23 @@ public class RelauncherGUI extends JDialog {
             }else{
                 updateJavaArgsPath();
             }
+            Runnable test = this.testJavaAndReturn();
+            if (test != null) {
+                test.run();
+                return;
+            }
+
             frame.dispose();
         });
-        relaunchButtonPanel.add(relaunchButton);
+        JButton configCancelButton = new JButton("Discard Changes");
+        configCancelButton.addActionListener(e -> {
+            selected = null;
+            frame.dispose();
+        });
+        configButtonPanel.add(configCancelButton);
+        configButtonPanel.add(configSaveButton);
 
-        return relaunchButtonPanel;
+        return configButtonPanel;
     }
 
     private void listenToTextFieldUpdate(JTextField text, Consumer<JTextField> textConsumer) {
@@ -876,5 +801,4 @@ public class RelauncherGUI extends JDialog {
             JOptionPane.showMessageDialog(this, "Failed to test Java (more information in console): " + e.getMessage(), "Java Test Failed", JOptionPane.ERROR_MESSAGE);
         }
     }
-
 }

@@ -1,6 +1,7 @@
 package com.cleanroommc.relauncher.download;
 
 import com.cleanroommc.relauncher.CleanroomRelauncher;
+import com.cleanroommc.relauncher.gui.LoadingGUI;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
@@ -53,19 +54,37 @@ public final class GlobalDownloader {
         int total = this.downloads.size();
         int completed = 0;
         int last = 0;
+        LoadingGUI loading = new LoadingGUI();
+        loading.enableProgress();
+        loading.updateStatus("Downloading Cleanroom files and libraries...");
         for (Future download : this.downloads) {
+            loading.show();
             try {
                 download.get();
                 completed++;
                 int percentage = (completed * 100) / total;
                 if (percentage % 10 == 0 && last != percentage) {
                     last = percentage;
+                    loading.updateStatus("Download Progress: "+completed+" / "+total+" | "+percentage+"% completed.");
+                    loading.setProgress(percentage);
                     CleanroomRelauncher.LOGGER.info("Download Progress: {} / {} | {}% completed.", completed, total, percentage);
                 }
             } catch (InterruptedException | ExecutionException e) {
+                loading.close();
                 throw new RuntimeException("Unable to complete download", e);
             }
         }
+        loading.disableProgress();
+        loading.updateStatus("Download Complete");
+        try{
+            Thread.sleep(500);
+        } catch (InterruptedException e){
+          CleanroomRelauncher.LOGGER.warn("Interrupted thread sleep",e);
+          loading.close();
+        }
+        loading.close();
+        loading.updateStatus("Initialising..");
+
     }
 
 }
