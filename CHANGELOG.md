@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0] - 2026-03-20
+
+### Added
+- Auto-provisioning of Java installations
+- In-game configuration menu (accessed through the mod menu)
+
+### Changed
+- Settings GUI to look a little better
+- First-time users normally interacts with the GUI before relaunching, though now it may be skipped if Automatic Install options are filled, for modpack distribution purposes
+
 ## [0.3.2] - 2025-12-11
 
 ### Fixed
