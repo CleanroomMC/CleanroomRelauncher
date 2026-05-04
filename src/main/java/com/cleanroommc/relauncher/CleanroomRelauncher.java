@@ -135,6 +135,28 @@ public class CleanroomRelauncher {
             throw new RuntimeException("Unable to extract relauncher's jar file", e);
         }
     }
+    private static RelauncherGUI showGUI(
+            List<CleanroomRelease> releases,
+            CleanroomRelease selected,
+            String javaPath,
+            String javaArgs,
+            JavaTargetsEnum javaTarget,
+            VendorsEnum javaVendor,
+            boolean autoSetup,
+            boolean isJvm8,
+            boolean updateNotification) {
+
+        return RelauncherGUI.show(releases, $ -> {
+            $.selected        = selected;
+            $.javaPath        = javaPath;
+            $.targetSelected  = javaTarget;
+            $.vendorSelected  = javaVendor;
+            $.javaArgs        = javaArgs;
+            $.autoSetup       = autoSetup;
+            $.shouldScale     = isJvm8;
+            $.updateNotification = updateNotification;
+        });
+    }
 
     static void run() {
         if (isCleanroom()) {
@@ -174,24 +196,14 @@ public class CleanroomRelauncher {
 //        if (javaArgs == null) {
 //            javaArgs = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
 //        }
+        if (needsNotifyLatest) {
+            CONFIG.setLatestCleanroomVersion(latestRelease.name);
+        }
         if (relauncherEnabled) {
             if (!autoSetup && (selected == null || javaPath == null || needsNotifyLatest)) {
-                final String fJavaPath = javaPath;
-                final String fJavaArgs = javaArgs;
-                final VendorsEnum fJavaVendor = javaVendor;
-                final JavaTargetsEnum fJavaTarget = javaTarget;
-                final CleanroomRelease fSelected = selected;
-                final boolean fAutoSetup = autoSetup;
                 while(javaPath == null || Objects.equals(javaPath, "")){
-                    RelauncherGUI gui = RelauncherGUI.show(releases, $ -> {
-                        $.selected = fSelected;
-                        $.javaPath = fJavaPath;
-                        $.targetSelected = fJavaTarget;
-                        $.vendorSelected = fJavaVendor;
-                        $.javaArgs = fJavaArgs;
-                        $.autoSetup = fAutoSetup;
-                        $.shouldScale=(!isJvm8());
-                    });
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs,
+                            javaTarget, javaVendor, autoSetup, !isJvm8(), false);
 
                     if (gui.selected != null) {
                         selected = gui.selected;
@@ -219,33 +231,9 @@ public class CleanroomRelauncher {
             }
             if(autoSetup){
                 if(needsNotifyLatest) {
-                    selected = latestRelease;
-                    CONFIG.setCleanroomVersion(selected.name);
-                    CONFIG.setLatestCleanroomVersion(latestRelease.name);
-                }
-                javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
-                while(Objects.equals(javaPath, "")){
-                    final String fJavaPath = javaPath;
-                    final String fJavaArgs = javaArgs;
-                    final VendorsEnum fJavaVendor = VendorsEnum.AZUL_ZULU;
-                    final JavaTargetsEnum fJavaTarget = JavaTargetsEnum.J25;
-                    final CleanroomRelease fSelected = selected;
-                    final boolean fAutoSetup = autoSetup;
-                    RelauncherGUI gui = RelauncherGUI.show(releases, $ -> {
-                        $.selected = fSelected;
-                        $.javaPath = fJavaPath;
-                        $.targetSelected = fJavaTarget;
-                        $.vendorSelected = fJavaVendor;
-                        $.javaArgs = fJavaArgs;
-                        $.autoSetup = fAutoSetup;
-                        $.shouldScale=(isJvm8());
-                    });
-
-                    if (gui.selected != null) {
-                        selected = gui.selected;
-                    } else{
-                        selected = latestRelease;
-                    }
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs,
+                            javaTarget, javaVendor, autoSetup, isJvm8(), true);
+                    selected = (gui.selected != null)? gui.selected : latestRelease;
                     javaPath = gui.javaPath;
                     javaArgs = gui.javaArgs;
                     javaTarget = gui.targetSelected;
@@ -258,6 +246,26 @@ public class CleanroomRelauncher {
                         CONFIG.setTargetVendor(javaVendor);
                     }
                 }
+                javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
+                while(Objects.equals(javaPath, "")){
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs,
+                            javaTarget, javaVendor, autoSetup, isJvm8(), false);
+
+                    selected = (gui.selected != null)? gui.selected : latestRelease;
+                    javaPath = gui.javaPath;
+                    javaArgs = gui.javaArgs;
+                    javaTarget = gui.targetSelected;
+                    javaVendor = gui.vendorSelected;
+                    autoSetup = gui.autoSetup;
+
+                    javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
+                    if (!javaPath.isEmpty()){
+                        CONFIG.setTargetJavaVersion(javaTarget);
+                        CONFIG.setTargetVendor(javaVendor);
+                    }
+                }
+
+                CONFIG.save();
                 CONFIG.setJavaExecutablePath(javaPath);
                 LOGGER.warn("Setting the rest");
                 if (javaArgs == null || javaArgs.isEmpty()) {
@@ -277,6 +285,8 @@ public class CleanroomRelauncher {
                     javaVendor=VendorsEnum.AZUL_ZULU;
                     CONFIG.setTargetVendor(javaVendor);
                 }
+                CONFIG.setCleanroomVersion(selected.name);
+                CONFIG.setAutoSetup(autoSetup);
                 CONFIG.save();
 
 
