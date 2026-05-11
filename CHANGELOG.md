@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0] - 2026-05-11
+
+### Added
+- Notification Screen
+- Update Screen
+
+### Changed
+- Conform to CF standards
+
 ## [0.4.0] - 2026-03-20
 
 ### Added
