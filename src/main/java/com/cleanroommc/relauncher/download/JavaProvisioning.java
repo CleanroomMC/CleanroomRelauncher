@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -29,16 +28,6 @@ public class JavaProvisioning {
     private static final int CONNECT_TIMEOUT_MS = 30_000;
     private static final int READ_TIMEOUT_MS = 120_000;
     private static final String USER_AGENT = "Mozilla/5.0 CleanroomRelauncher/1.0";
-
-    private static List<JavaInstall> findLocalProvisionedJavas() {
-        return JavaLocator.locators().parallelStream()
-                .map(JavaLocator::all)
-                .flatMap(Collection::stream)
-                .filter(javaInstall -> javaInstall.version().major() >= 25)
-                .distinct()
-                .sorted()
-                .collect(Collectors.toList());
-    }
 
     public static String validateOrProvisionJava(String path, JavaTargetsEnum target, VendorsEnum vendor) {
         LoadingGUI loading = new LoadingGUI();
@@ -54,15 +43,10 @@ public class JavaProvisioning {
                 }
                 CleanroomRelauncher.LOGGER.warn("Invalid path, Fetching a new java instance");
                 loading.updateStatus("Scanning for Java " + target.getInternalNameInt() + " Installations ...");
-                List<JavaInstall> provisionedJavas = findLocalProvisionedJavas();
-
-                List<JavaInstall> validJavaInstalls = Stream.concat(
-                                JavaLocator.locators().parallelStream()
-                                        .map(JavaLocator::all)
-                                        .flatMap(Collection::stream),
-                                provisionedJavas.stream()
-                        )
-                        .filter(javaInstall -> javaInstall.version().major() == target.getInternalNameInt())
+                List<JavaInstall> validJavaInstalls = JavaLocator.locators().parallelStream()
+                        .map(JavaLocator::all)
+                        .flatMap(Collection::stream)
+                        .filter(j -> j.version().major() == target.getInternalNameInt())
                         .filter(javaInstall -> {
                             if (vendor == VendorsEnum.ANY || vendor == null) return true;
                             return javaInstall.vendor().name().toLowerCase().contains(vendor.getInternalName().toLowerCase());
@@ -91,17 +75,12 @@ public class JavaProvisioning {
         } else{
             try {
                 loading.updateStatus("Scanning for Java " + target.getInternalNameInt() + " Installations ...");
-                List<JavaInstall> provisionedJavas = findLocalProvisionedJavas();
-
-                List<JavaInstall> validJavaInstalls = Stream.concat(
-                                JavaLocator.locators().parallelStream()
-                                        .map(JavaLocator::all)
-                                        .flatMap(Collection::stream),
-                                provisionedJavas.stream()
-                        )
-                        .filter(javaInstall -> javaInstall.version().major() == target.getInternalNameInt())
+                List<JavaInstall> validJavaInstalls = JavaLocator.locators().parallelStream()
+                        .map(JavaLocator::all)
+                        .flatMap(Collection::stream)
+                        .filter(j -> j.version().major() == target.getInternalNameInt())
                         .filter(javaInstall -> {
-                            if (vendor == VendorsEnum.ANY) return true;
+                            if (vendor == VendorsEnum.ANY || vendor == null) return true;
                             return javaInstall.vendor().name().toLowerCase().contains(vendor.getInternalName().toLowerCase());
                         })
                         .distinct()
