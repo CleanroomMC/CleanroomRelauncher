@@ -180,7 +180,7 @@ public class CleanroomRelauncher {
         VendorsEnum javaVendor = CONFIG.getJavaVendor();
         boolean autoSetup = CONFIG.getAutoSetup();
         boolean relauncherEnabled = CONFIG.getRelauncherEnabled();
-        boolean needsNotifyLatest = notedLatestVersion == null || !notedLatestVersion.equals(latestRelease.name);
+        boolean needsNotifyLatest = notedLatestVersion == null || (!notedLatestVersion.equals(latestRelease.name)&&(!Objects.equals(CONFIG.getCleanroomVersion(), latestRelease.name)));
         if (selectedVersion != null) {
             selected = releases.stream().filter(cr -> cr.name.equals(selectedVersion)).findFirst().orElse(null);
         }
@@ -198,6 +198,7 @@ public class CleanroomRelauncher {
 //        }
         if (needsNotifyLatest) {
             CONFIG.setLatestCleanroomVersion(latestRelease.name);
+            CONFIG.save();
         }
         if (relauncherEnabled) {
             if (!autoSetup && (selected == null || javaPath == null || needsNotifyLatest)) {
@@ -228,6 +229,9 @@ public class CleanroomRelauncher {
                 CONFIG.setAutoSetup(autoSetup);
 
                 CONFIG.save();
+
+                notedLatestVersion = CONFIG.getLatestCleanroomVersion();
+                needsNotifyLatest = (notedLatestVersion == null || !notedLatestVersion.equals(latestRelease.name));
             }
             if(autoSetup){
                 if(needsNotifyLatest) {
