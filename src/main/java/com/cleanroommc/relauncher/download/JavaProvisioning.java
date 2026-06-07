@@ -16,7 +16,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -32,50 +31,13 @@ public class JavaProvisioning {
     private static final String USER_AGENT = "Mozilla/5.0 CleanroomRelauncher/1.0";
 
     private static List<JavaInstall> findLocalProvisionedJavas() {
-        List<JavaInstall> results = new ArrayList<>();
-        Path javaBase = Paths.get(System.getProperty("user.home"), ".cleanroom", "java");
-        if (!Files.exists(javaBase)) return results;
-
-        String expectedBinary = System.getProperty("os.name").toLowerCase().contains("win")
-                ? "javaw.exe" : "java";
-
-        try (DirectoryStream<Path> vendorDirs = Files.newDirectoryStream(javaBase)) {
-            for (Path vendorDir : vendorDirs) {
-                if (!Files.isDirectory(vendorDir)) continue;
-
-                // Check for bin folder, in case a zip extracted the root directly
-                Path directBinary = vendorDir.resolve("bin").resolve(expectedBinary);
-                if (Files.exists(directBinary)) {
-                    tryParseAndAdd(directBinary, results);
-                    continue;
-                }
-
-                // Check one level deeper
-                try (DirectoryStream<Path> subDirs = Files.newDirectoryStream(vendorDir)) {
-                    for (Path subDir : subDirs) {
-                        if (!Files.isDirectory(subDir)) continue;
-                        Path nestedBinary = subDir.resolve("bin").resolve(expectedBinary);
-                        if (Files.exists(nestedBinary)) {
-                            tryParseAndAdd(nestedBinary, results);
-                            break;
-                        }
-                    }
-                }
-            }
-        } catch (IOException e) {
-            CleanroomRelauncher.LOGGER.warn("Failed to scan ~/.cleanroom/java", e);
-        }
-        return results;
-    }
-    private static void tryParseAndAdd(Path binary, List<JavaInstall> results) {
-        try {
-            JavaInstall install = JavaUtils.parseInstall(binary.toAbsolutePath().toString());
-            CleanroomRelauncher.LOGGER.info("Found provisioned Java {} at {}",
-                    install.version().major(), binary);
-            results.add(install);
-        } catch (IOException e) {
-            CleanroomRelauncher.LOGGER.warn("Failed to parse Java at {}", binary, e);
-        }
+        return JavaLocator.locators().parallelStream()
+                .map(JavaLocator::all)
+                .flatMap(Collection::stream)
+                .filter(javaInstall -> javaInstall.version().major() >= 25)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
     }
 
     public static String validateOrProvisionJava(String path, JavaTargetsEnum target, VendorsEnum vendor) {
