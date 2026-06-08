@@ -15,6 +15,7 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Collection;
 import java.util.List;
@@ -75,6 +76,7 @@ public class JavaProvisioning {
         } else{
             try {
                 loading.updateStatus("Scanning for Java " + target.getInternalNameInt() + " Installations ...");
+                
                 List<JavaInstall> validJavaInstalls = JavaLocator.locators().parallelStream()
                         .map(JavaLocator::all)
                         .flatMap(Collection::stream)
@@ -166,6 +168,8 @@ public class JavaProvisioning {
         URL url = new URL(urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         // Don't Allow redirects automatically
+        conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        conn.setReadTimeout(15_000);
         conn.setInstanceFollowRedirects(false);
         int status = conn.getResponseCode();
         if (status == HttpURLConnection.HTTP_MOVED_TEMP ||
@@ -258,22 +262,45 @@ public class JavaProvisioning {
                     TarArchiveEntry entry;
                     while ((entry = tis.getNextTarEntry()) != null) {
                         if (rootFolder[0] == null && entry.getName().replace("/", "").endsWith("bin")) {
-                            rootFolder[0] = entry.getName();
+                            rootFolder[0] = getTopLevelFolder(entry.getName());
                         }
                         processEntry(dest, entry.getName(), entry.isDirectory(), tis);
                     }
                 }
             }
         } catch (IOException e) {
-            Files.deleteIfExists(dest);
+            deleteRecursively(dest);
             throw new IOException("Failed to extract archive: " + archive, e);
+        } finally {
+            gui.close();
         }
         if (rootFolder[0] != null) {
             gui.close();
             return dest.resolve(rootFolder[0]).toAbsolutePath().toString();
         }
-        gui.close();
         return dest.toAbsolutePath().toString();
+    }
+    private static void deleteRecursively(Path path) throws IOException{
+        if (!Files.exists(path)) return;
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException  {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;}
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException e) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException e) throws IOException {
+                if (e != null) throw e;
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
     private static void processEntry(Path dest, String name, boolean isDir, InputStream stream) throws IOException {
         // Zip Slip
