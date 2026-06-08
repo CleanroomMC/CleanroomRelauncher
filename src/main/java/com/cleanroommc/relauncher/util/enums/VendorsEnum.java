@@ -1,7 +1,7 @@
 package com.cleanroommc.relauncher.util.enums;
 
 public enum VendorsEnum implements IDisplayableEnum {
-    ADOPTIUM("Adoptium", "adoptium", "temurin"),
+    ADOPTIUM("Adoptium", "temurin", "temurin"),
     AZUL_ZULU("Azul Zulu", "azul", "zulu"),
     AMAZON("Amazon Corretto", "amazon", "corretto"),
     ORACLE("Oracle", "oracle", "oracle_open_jdk"),
