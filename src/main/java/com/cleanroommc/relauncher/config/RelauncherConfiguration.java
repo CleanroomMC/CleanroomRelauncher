@@ -46,6 +46,8 @@ public class RelauncherConfiguration {
     private boolean autoSetup;
     @SerializedName("enableRelauncher")
     private boolean enableRelauncher=true;
+    @SerializedName("FetchUpdates")
+    private boolean FetchUpdates=true;
 
     public String getCleanroomVersion() {
         return cleanroomVersion;
@@ -77,6 +79,10 @@ public class RelauncherConfiguration {
 
     public boolean getRelauncherEnabled() {
         return enableRelauncher;
+    }
+
+    public boolean getFetchUpdatesEnabled() {
+        return FetchUpdates;
     }
 
     public void setCleanroomVersion(String cleanroomVersion) {

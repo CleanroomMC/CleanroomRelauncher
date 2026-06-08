@@ -15,6 +15,8 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.cleanroommc.relauncher.CleanroomRelauncher.CONFIG;
+
 public class CleanroomRelease {
 
     private static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
@@ -30,7 +32,8 @@ public class CleanroomRelease {
                 long fileModifiedM = Files.getLastModifiedTime(CACHE_FILE).toMillis();
                 long nowM = System.currentTimeMillis();
                 long diffM = nowM - fileModifiedM;
-                if (diffM < ttlM) {
+                boolean cacheIsFresh = diffM < ttlM;
+                if (!CONFIG.getFetchUpdatesEnabled() || cacheIsFresh) {
                     return fetchReleasesFromCache(CACHE_FILE);
                 }
             } catch (Throwable t) {
