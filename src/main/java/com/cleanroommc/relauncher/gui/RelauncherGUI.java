@@ -1,16 +1,15 @@
 package com.cleanroommc.relauncher.gui;
 
 import com.cleanroommc.javautils.JavaUtils;
+import com.cleanroommc.javautils.api.JavaDistro;
 import com.cleanroommc.javautils.api.JavaInstall;
+import com.cleanroommc.javautils.api.JavaVersion;
 import com.cleanroommc.javautils.spi.JavaLocator;
 import com.cleanroommc.platformutils.Platform;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.config.RelauncherConfiguration;
 import com.cleanroommc.relauncher.download.CleanroomRelease;
 import com.cleanroommc.relauncher.util.enums.ArgsEnum;
-import com.cleanroommc.relauncher.util.enums.IDisplayableEnum;
-import com.cleanroommc.relauncher.util.enums.JavaTargetsEnum;
-import com.cleanroommc.relauncher.util.enums.VendorsEnum;
 import net.minecraftforge.fml.cleanroomrelauncher.ExitVMBypass;
 
 import javax.swing.*;
@@ -30,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.cleanroommc.relauncher.CleanroomRelauncher.*;
 
@@ -165,8 +165,8 @@ public class RelauncherGUI extends JDialog {
     }
 
     public CleanroomRelease selected;
-    public JavaTargetsEnum targetSelected = JavaTargetsEnum.J25;
-    public VendorsEnum vendorSelected = VendorsEnum.AZUL_ZULU;
+    public JavaVersion targetSelected = JavaVersion.parseOrThrow(25);
+    public JavaDistro vendorSelected = JavaDistro.ZULU;
     public String javaPath, javaArgs;
     public Boolean updateNotification;
     public boolean autoSetup;
@@ -174,11 +174,11 @@ public class RelauncherGUI extends JDialog {
     private static HashSet<ArgsEnum> args = new HashSet<>();
     public void updateJavaArgs() {
         StringBuilder argBuilder = new StringBuilder();
-        if (targetSelected.getInternalNameInt()< 25) {
+        if (targetSelected.major()< 25) {
             argBuilder.append(ArgsEnum.UnlockExperimentalOptions.getArg()).append(" ");
         }
         for(ArgsEnum arg : args) {
-            if (arg == ArgsEnum.CompactObjectHeaders && targetSelected.getInternalNameInt() >= 24) {
+            if (arg == ArgsEnum.CompactObjectHeaders && targetSelected.major() >= 24) {
                 argBuilder.append(arg.getArg()).append(" ");
             }else if(arg == ArgsEnum.ZGC){
                 argBuilder.append(arg.getArg()).append(" ");
@@ -429,9 +429,9 @@ public class RelauncherGUI extends JDialog {
 
         return cleanroomPicker;
     }
-    private <T extends Enum<T> & IDisplayableEnum>JPanel initializeJavaTargetsPicker(
+    private <T extends Comparable<T>>JPanel initializeJavaTargetsPicker(
             String titleLabel,
-            T[] values,
+            List<T> values,
             T selected,
             Consumer<T> onSelectionChange
     ){
@@ -460,16 +460,6 @@ public class RelauncherGUI extends JDialog {
             targetModel.addElement(target);
         }
         targetBox.setModel(targetModel);
-        targetBox.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof IDisplayableEnum) {
-                    setText((((IDisplayableEnum) value).getDisplayName()));
-                }
-                return this;
-            }
-        });
         targetBox.setSelectedItem(selected);
         targetBox.setMaximumRowCount(5);
         targetBox.addActionListener(e -> {
@@ -525,16 +515,18 @@ public class RelauncherGUI extends JDialog {
         targetPanels.setLayout(new BoxLayout(targetPanels, BoxLayout.Y_AXIS));
         JPanel versionPanel = this.initializeJavaTargetsPicker(
                 "Select Target Java Version:",
-                JavaTargetsEnum.values(),
+                IntStream.rangeClosed(21, 26)
+                        .mapToObj(JavaVersion::parseOrThrow)
+                        .collect(Collectors.toList()),
                 targetSelected,
-                (JavaTargetsEnum val) -> targetSelected = val
+                (JavaVersion val) -> targetSelected = val
         );
 
         JPanel vendorPanel = this.initializeJavaTargetsPicker(
                 "Select Preferred Vendor:",
-                VendorsEnum.values(),
+                JavaDistro.all(),
                 vendorSelected,
-                (VendorsEnum val) -> vendorSelected = val
+                (JavaDistro val) -> vendorSelected = val
         );
         targetPanels.add(versionPanel, BorderLayout.NORTH);
         targetPanels.add(vendorPanel, BorderLayout.SOUTH);
@@ -568,7 +560,7 @@ public class RelauncherGUI extends JDialog {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof JavaInstall) {
                     JavaInstall javaInstall = (JavaInstall) value;
-                    setText(javaInstall.vendor() + " " + javaInstall.version());
+                    setText(javaInstall.distro() + " " + javaInstall.version());
                 }
                 return this;
             }
@@ -578,7 +570,7 @@ public class RelauncherGUI extends JDialog {
         versionBox.addActionListener(e -> {
             if (versionBox.getSelectedItem() != null) {
                 JavaInstall javaInstall = (JavaInstall) versionBox.getSelectedItem();
-                javaPath = javaInstall.executable(true).getAbsolutePath();
+                javaPath = javaInstall.executable(true).toAbsolutePath().toString();
                 text.setText(javaPath);
             }
         });
@@ -596,10 +588,10 @@ public class RelauncherGUI extends JDialog {
             switchableContainer.removeAll();
             if (simplifiedBtn.isSelected()) {
                 if (vendorSelected == null){
-                    vendorSelected = VendorsEnum.AZUL_ZULU;
+                    vendorSelected = JavaDistro.ZULU;
                 }
                 if (targetSelected == null){
-                    targetSelected=JavaTargetsEnum.J25;
+                    targetSelected= JavaVersion.parseOrThrow(25);
                 }
                 if (targetPanels.getClientProperty("scaled") == null) {
                     scaleComponent(targetPanels, finalScale);
@@ -839,10 +831,10 @@ public class RelauncherGUI extends JDialog {
             }
             if (autoSetup) {
                 if (vendorSelected==null) {
-                    vendorSelected = VendorsEnum.AZUL_ZULU;
+                    vendorSelected = JavaDistro.ZULU;
                 }
                 if (targetSelected==null) {
-                    targetSelected = JavaTargetsEnum.J25;
+                    targetSelected = JavaVersion.parseOrThrow(25);
                 }
             }
             if (!autoSetup) {

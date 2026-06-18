@@ -1,15 +1,15 @@
 package com.cleanroommc.relauncher;
 
 import com.cleanroommc.javautils.JavaUtils;
+import com.cleanroommc.javautils.api.JavaDistro;
 import com.cleanroommc.javautils.api.JavaVersion;
+import com.cleanroommc.javautils.spi.JavaProvisioner;
 import com.cleanroommc.relauncher.config.RelauncherConfiguration;
 import com.cleanroommc.relauncher.download.CleanroomRelease;
 import com.cleanroommc.relauncher.download.cache.CleanroomCache;
 import com.cleanroommc.relauncher.download.schema.Version;
 import com.cleanroommc.relauncher.gui.RelauncherGUI;
 import com.cleanroommc.relauncher.util.enums.ArgsEnum;
-import com.cleanroommc.relauncher.util.enums.JavaTargetsEnum;
-import com.cleanroommc.relauncher.util.enums.VendorsEnum;
 import com.google.gson.Gson;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraftforge.fml.cleanroomrelauncher.ExitVMBypass;
@@ -36,6 +36,7 @@ public class CleanroomRelauncher {
     public static final Logger LOGGER = LogManager.getLogger("CleanroomRelauncher");
     public static final Gson GSON = new Gson();
     public static final Path CACHE_DIR = Paths.get(System.getProperty("user.home"), ".cleanroom", "relauncher");
+    public static JavaProvisioner javaProvisioner;
 
     public static RelauncherConfiguration CONFIG = RelauncherConfiguration.read();
 
@@ -85,7 +86,12 @@ public class CleanroomRelauncher {
         String wrapperDirectory = "wrapper/com/cleanroommc/relauncher/wrapper";
         String wrapperFile = wrapperDirectory + "/RelaunchMainWrapper.class";
 
-        File relauncherJarFile = JavaUtils.jarLocationOf(CleanroomRelauncher.class);
+        File relauncherJarFile = null;
+        try {
+            relauncherJarFile = JavaUtils.jarLocationOf(CleanroomRelauncher.class);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
         try (FileSystem containerFs = FileSystems.newFileSystem(relauncherJarFile.toPath(), null)) {
             String originalHash;
@@ -140,8 +146,8 @@ public class CleanroomRelauncher {
             CleanroomRelease selected,
             String javaPath,
             String javaArgs,
-            JavaTargetsEnum javaTarget,
-            VendorsEnum javaVendor,
+            JavaVersion javaTarget,
+            JavaDistro javaVendor,
             boolean autoSetup,
             boolean isJvm8,
             boolean updateNotification) {
@@ -176,8 +182,8 @@ public class CleanroomRelauncher {
         String notedLatestVersion = CONFIG.getLatestCleanroomVersion();
         String javaPath = CONFIG.getJavaExecutablePath();
         String javaArgs = CONFIG.getJavaArguments();
-        JavaTargetsEnum javaTarget = CONFIG.getJavaTarget();
-        VendorsEnum javaVendor = CONFIG.getJavaVendor();
+        JavaVersion javaTarget = CONFIG.getJavaTarget();
+        JavaDistro javaVendor = CONFIG.getJavaVendor();
         boolean autoSetup = CONFIG.getAutoSetup();
         boolean relauncherEnabled = CONFIG.getRelauncherEnabled();
         boolean needsNotifyLatest = notedLatestVersion == null || (!notedLatestVersion.equals(latestRelease.name)&&(!Objects.equals(CONFIG.getCleanroomVersion(), latestRelease.name)));
@@ -188,10 +194,10 @@ public class CleanroomRelauncher {
             javaPath = null;
         }
         if (javaTarget == null) {
-            javaTarget = JavaTargetsEnum.J25;
+            javaTarget = JavaVersion.parseOrThrow(25);
         }
         if (javaVendor == null) {
-            javaVendor = VendorsEnum.AZUL_ZULU;
+            javaVendor = JavaDistro.ZULU;
         }
 //        if (javaArgs == null) {
 //            javaArgs = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
@@ -274,7 +280,7 @@ public class CleanroomRelauncher {
                 LOGGER.warn("Setting the rest");
                 if (javaArgs == null || javaArgs.isEmpty()) {
                     StringBuilder argBuilder = new StringBuilder();
-                    if (javaTarget.getInternalNameInt()< 25 ) {
+                    if (javaTarget.major()< 25 ) {
                         argBuilder.append(ArgsEnum.UnlockExperimentalOptions.getArg()).append(" ");
                     }
                     argBuilder.append(ArgsEnum.CompactObjectHeaders.getArg()).append(" ");
@@ -282,11 +288,11 @@ public class CleanroomRelauncher {
                 }
                 CONFIG.setJavaArguments(javaArgs);
                 if (javaTarget == null){
-                    javaTarget=JavaTargetsEnum.J25;
+                    javaTarget=JavaVersion.parseOrThrow(25);
                     CONFIG.setTargetJavaVersion(javaTarget);
                 }
                 if (javaVendor == null){
-                    javaVendor=VendorsEnum.AZUL_ZULU;
+                    javaVendor=JavaDistro.ZULU;
                     CONFIG.setTargetVendor(javaVendor);
                 }
                 CONFIG.setCleanroomVersion(selected.name);

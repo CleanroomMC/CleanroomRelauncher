@@ -1,9 +1,9 @@
 package com.cleanroommc.relauncher.config;
 
+import com.cleanroommc.javautils.api.JavaDistro;
+import com.cleanroommc.javautils.api.JavaVersion;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.util.enums.ArgsEnum;
-import com.cleanroommc.relauncher.util.enums.JavaTargetsEnum;
-import com.cleanroommc.relauncher.util.enums.VendorsEnum;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
@@ -35,9 +35,9 @@ public class RelauncherConfiguration {
     @SerializedName("latestVersion")
     private String latestCleanroomVersion;
     @SerializedName("targetJavaVersion")
-    private JavaTargetsEnum targetJavaVersion;
+    private JavaVersion targetJavaVersion;
     @SerializedName("targetVendor")
-    private VendorsEnum targetVendor;
+    private JavaDistro targetVendor;
     @SerializedName("javaPath")
     private String javaExecutablePath;
     @SerializedName("args")
@@ -57,11 +57,11 @@ public class RelauncherConfiguration {
         return latestCleanroomVersion;
     }
 
-    public VendorsEnum getJavaVendor() {
+    public JavaDistro getJavaVendor() {
         return targetVendor;
     }
 
-    public JavaTargetsEnum getJavaTarget() {
+    public JavaVersion getJavaTarget() {
         return targetJavaVersion;
     }
 
@@ -109,11 +109,11 @@ public class RelauncherConfiguration {
         this.enableRelauncher= enableRelauncher;
     }
 
-    public void setTargetJavaVersion(JavaTargetsEnum targetJavaVersion) {
+    public void setTargetJavaVersion(JavaVersion targetJavaVersion) {
         this.targetJavaVersion = targetJavaVersion;
     }
 
-    public void setTargetVendor(VendorsEnum targetVendor) {
+    public void setTargetVendor(JavaDistro targetVendor) {
         this.targetVendor = targetVendor;
     }
 
