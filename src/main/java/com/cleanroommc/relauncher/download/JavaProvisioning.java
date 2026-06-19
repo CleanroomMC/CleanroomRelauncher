@@ -41,7 +41,7 @@ public class JavaProvisioning {
                 }
                 CleanroomRelauncher.LOGGER.warn("Invalid path, Fetching a new java instance");
                 loading.updateStatus("Scanning for Java " + target.major() + " Installations ...");
-                String binaryPath = getString(target, vendor, loading);
+                String binaryPath = getBinaryPath(target, vendor, loading);
                 if(binaryPath != null){
                     return binaryPath;
                 }
@@ -57,7 +57,7 @@ public class JavaProvisioning {
             try {
                 loading.updateStatus("Scanning for Java " + target.major() + " Installations ...");
 
-                String binaryPath = getString(target, vendor, loading);
+                String binaryPath = getBinaryPath(target, vendor, loading);
                 if(binaryPath != null){
                     return binaryPath;
                 }
@@ -71,7 +71,7 @@ public class JavaProvisioning {
             }
         }
     }
-    private static @Nullable String getString(JavaVersion target, JavaDistro vendor, LoadingGUI loading) throws IOException {
+    private static @Nullable String getBinaryPath(JavaVersion target, JavaDistro vendor, LoadingGUI loading) throws IOException {
         List<JavaLocator> locators = JavaLocator.locators();
         locators.forEach(l -> l.onScan(directory ->
                 loading.updateStatus("Scanning for Java in " + directory + "...")));

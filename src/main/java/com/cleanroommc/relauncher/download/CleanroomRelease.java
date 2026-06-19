@@ -13,7 +13,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static com.cleanroommc.relauncher.CleanroomRelauncher.CONFIG;
 
@@ -23,6 +25,7 @@ public class CleanroomRelease {
     private static final int CONNECT_TIMEOUT_MS = 5_000;
     private static final int READ_TIMEOUT_MS    = 15_000;
     private static final String USER_AGENT = "Mozilla/5.0 CleanroomRelauncher/1.0";
+    private static final Map<String, String> RELEASE_HASHES = new HashMap<>();
 
     public static List<CleanroomRelease> queryAll() throws IOException {
         long ttlM = Duration.ofHours(1).toMillis(); // TODO: configurable, this is temp
@@ -47,6 +50,12 @@ public class CleanroomRelease {
 
         // After fetching releases, save them to the cache
         saveReleasesToCache(CACHE_FILE, releases);
+        RELEASE_HASHES.clear();
+        for (CleanroomRelease release : releases) {
+            if (release.tagName != null && release.commitHash != null) {
+                RELEASE_HASHES.put(release.tagName, release.commitHash);
+            }
+        }
         return releases;
     }
 
@@ -110,6 +119,8 @@ public class CleanroomRelease {
     public String name;
     @SerializedName("tag_name")
     public String tagName;
+    @SerializedName("target_commitish")
+    public String commitHash;
     public List<Asset> assets;
 
     public Asset getInstallerArtifact() {

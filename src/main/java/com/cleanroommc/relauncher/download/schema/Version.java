@@ -4,6 +4,7 @@ import com.cleanroommc.platformutils.OperatingSystem;
 import com.cleanroommc.platformutils.Platform;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.download.GlobalDownloader;
+import com.cleanroommc.relauncher.util.CacheUtils;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -64,14 +65,22 @@ public class Version {
                 continue; // Locally-zipped artifact
             }
             Path libraryJar = librariesDirectory.resolve(library.downloads.artifact.getPath(library.name));
-            if (!Files.exists(libraryJar)) {
-                GlobalDownloader.INSTANCE.from(library.downloads.artifact.url, libraryJar.toFile());
+            try{
+                if (!Files.exists(libraryJar) || CacheUtils.isFileCorrupt(libraryJar.toFile(), library.downloads.artifact.sha1, CacheUtils.HashAlgorithm.SHA1)) {
+                    GlobalDownloader.INSTANCE.from(library.downloads.artifact.url, libraryJar.toFile(), library.downloads.artifact.sha1, CacheUtils.HashAlgorithm.SHA1);
+                }
+            } catch (IOException e){
+                CleanroomRelauncher.LOGGER.error(library.downloads.artifact.url, e);
             }
             Download nativeArtifact = library.getNative(Platform.current());
             if (nativeArtifact != null) {
                 Path nativesJar = librariesDirectory.resolve(nativeArtifact.getPath(library.name));
-                if (!Files.exists(nativesJar)) {
-                    GlobalDownloader.INSTANCE.from(nativeArtifact.url, nativesJar.toFile());
+                try{
+                    if (!Files.exists(nativesJar) || CacheUtils.isFileCorrupt(nativesJar.toFile(), nativeArtifact.sha1, CacheUtils.HashAlgorithm.SHA1)) {
+                        GlobalDownloader.INSTANCE.from(nativeArtifact.url, nativesJar.toFile(), nativeArtifact.sha1, CacheUtils.HashAlgorithm.SHA1);
+                    }
+                } catch (IOException e){
+                    CleanroomRelauncher.LOGGER.error(nativeArtifact.url, e);
                 }
             }
             libraryPaths.add(libraryJar.toAbsolutePath().toString());
