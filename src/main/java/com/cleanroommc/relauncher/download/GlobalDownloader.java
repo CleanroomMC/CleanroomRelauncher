@@ -26,7 +26,7 @@ public final class GlobalDownloader {
 
     private final List<ForkJoinTask> downloads = new ArrayList<>();
 
-    public void from(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
+    public ForkJoinTask<?> from(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
         URI uri;
         URL url;
         try {
@@ -35,20 +35,21 @@ public final class GlobalDownloader {
         } catch (MalformedURLException e) {
             throw new RuntimeException(String.format("Unable to construct url %s", source), e);
         }
-        this.downloads.add(ForkJoinPool.commonPool().submit(() -> {
+        final String cleanHash = expectedHash != null ? expectedHash.trim() : null;
+        ForkJoinTask<?> task = ForkJoinPool.commonPool().submit(() -> {
             try {
                 FileUtils.copyURLToFile(url, destination);
                 CleanroomRelauncher.LOGGER.debug("Downloaded {} to {}", uri.toString(), destination.getAbsolutePath());
             } catch (IOException e) {
                 throw new RuntimeException(String.format("Unable to download %s to %s", url, destination), e);
             }
-            if (expectedHash != null && algo != null) {
+            if (cleanHash != null && algo != null) {
                 try {
-                    if (CacheUtils.isFileCorrupt(destination, expectedHash, algo)) {
+                    if (CacheUtils.isFileCorrupt(destination, cleanHash, algo)) {
                         destination.delete(); // Don't leave a corrupt file on disk
                         throw new RuntimeException(String.format(
                                 "Hash mismatch for %s — expected %s (%s) but got %s",
-                                destination, expectedHash, algo.name(),
+                                destination, cleanHash, algo.name(),
                                 CacheUtils.hash(destination, algo) // recompute only for the error message
                         ));
                     }
@@ -56,13 +57,15 @@ public final class GlobalDownloader {
                     throw new RuntimeException("Failed to hash-check downloaded file: " + destination, e);
                 }
             }
-        }));
+        });
+        this.downloads.add(task);
+        return task;
     }
 
     public void immediatelyFrom(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
-        this.from(source, destination, expectedHash, algo);
+
         try {
-            this.downloads.remove(this.downloads.size() - 1).get();
+            this.from(source, destination, expectedHash, algo).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Unable to complete download", e);
         }
