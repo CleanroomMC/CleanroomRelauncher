@@ -36,6 +36,7 @@ public class CleanroomRelauncher {
     public static final Logger LOGGER = LogManager.getLogger("CleanroomRelauncher");
     public static final Gson GSON = new Gson();
     public static final Path CACHE_DIR = Paths.get(System.getProperty("user.home"), ".cleanroom", "relauncher");
+    public static Path CLEANROOM_BASE = Paths.get(System.getProperty("user.home"), ".cleanroom");
     public static JavaProvisioner javaProvisioner;
 
     public static RelauncherConfiguration CONFIG = RelauncherConfiguration.read();
@@ -163,7 +164,36 @@ public class CleanroomRelauncher {
             $.updateNotification = updateNotification;
         });
     }
+    public static void clearFolders() {
 
+
+        if (CONFIG.getClearCleanroomFolderEnabled()) {
+            deleteFolder(CLEANROOM_BASE.resolve("relauncher"));
+            CONFIG.setClearCleanroomFolder(false);
+
+        }
+
+        if (CONFIG.getClearJavaProvisionFolderEnabled()) {
+            deleteFolder(CLEANROOM_BASE.resolve("java"));
+            CONFIG.setClearJavaProvisionFolder(false);
+        }
+    }
+    public static void deleteFolder(Path folder) {
+        if (!Files.exists(folder)) return;
+
+        try (Stream<Path> walker = Files.walk(folder)) {
+            walker.sorted(Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.delete(path);
+                        } catch (IOException e) {
+                            LOGGER.error("Failed to delete: {},{}", path, e);
+                        }
+                    });
+        } catch (IOException e) {
+            LOGGER.error("Failed to walk folder: {},{}", folder, e);
+        }
+    }
     static void run() {
         if (isCleanroom()) {
             LOGGER.info("Cleanroom detected. No need to relaunch!");
@@ -171,6 +201,7 @@ public class CleanroomRelauncher {
         }
 
         replaceCerts();
+        clearFolders();
 
         List<CleanroomRelease> releases = releases();
         CleanroomRelease latestRelease = releases.get(0);

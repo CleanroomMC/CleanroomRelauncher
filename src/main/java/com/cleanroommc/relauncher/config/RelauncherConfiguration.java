@@ -15,7 +15,9 @@ import java.nio.file.Path;
 
 public class RelauncherConfiguration {
 
-    public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    public static final Gson GSON = new GsonBuilder()
+            .setPrettyPrinting()
+            .create();
     public static final Path FILE = Launch.minecraftHome.toPath().resolve("config/relauncher.json");
 
     public static RelauncherConfiguration read() {
@@ -48,6 +50,10 @@ public class RelauncherConfiguration {
     private boolean enableRelauncher=true;
     @SerializedName("FetchUpdates")
     private boolean FetchUpdates=true;
+    @SerializedName("clearCleanroomFolder")
+    private boolean clearCleanroomFolder=false;
+    @SerializedName("clearJavaProvisionFolder")
+    private boolean clearJavaProvisionFolder=false;
 
     public String getCleanroomVersion() {
         return cleanroomVersion;
@@ -85,6 +91,13 @@ public class RelauncherConfiguration {
         return FetchUpdates;
     }
 
+    public boolean getClearCleanroomFolderEnabled() {
+        return clearCleanroomFolder;
+    }
+    public boolean getClearJavaProvisionFolderEnabled() {
+        return clearJavaProvisionFolder;
+    }
+
     public void setCleanroomVersion(String cleanroomVersion) {
         this.cleanroomVersion = cleanroomVersion;
     }
@@ -115,6 +128,13 @@ public class RelauncherConfiguration {
 
     public void setTargetVendor(JavaDistro targetVendor) {
         this.targetVendor = targetVendor;
+    }
+
+    public void setClearCleanroomFolder(boolean value) {
+        this.clearCleanroomFolder = value;
+    }
+    public void setClearJavaProvisionFolder(boolean value) {
+        this.clearJavaProvisionFolder = value;
     }
 
     public void save() {
