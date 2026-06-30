@@ -37,9 +37,9 @@ public class RelauncherConfiguration {
     @SerializedName("latestVersion")
     private String latestCleanroomVersion;
     @SerializedName("targetJavaVersion")
-    private JavaVersion targetJavaVersion;
+    private int targetJavaVersion;
     @SerializedName("targetVendor")
-    private JavaDistro targetVendor;
+    private String targetVendor;
     @SerializedName("javaPath")
     private String javaExecutablePath;
     @SerializedName("args")
@@ -64,11 +64,11 @@ public class RelauncherConfiguration {
     }
 
     public JavaDistro getJavaVendor() {
-        return targetVendor;
+        return JavaDistro.match(targetVendor);
     }
 
     public JavaVersion getJavaTarget() {
-        return targetJavaVersion;
+        return JavaVersion.parseOrThrow(String.valueOf(targetJavaVersion));
     }
 
     public String getJavaExecutablePath() {
@@ -123,11 +123,11 @@ public class RelauncherConfiguration {
     }
 
     public void setTargetJavaVersion(JavaVersion targetJavaVersion) {
-        this.targetJavaVersion = targetJavaVersion;
+        this.targetJavaVersion = targetJavaVersion.major();
     }
 
     public void setTargetVendor(JavaDistro targetVendor) {
-        this.targetVendor = targetVendor;
+        this.targetVendor = targetVendor.name();
     }
 
     public void setClearCleanroomFolder(boolean value) {
