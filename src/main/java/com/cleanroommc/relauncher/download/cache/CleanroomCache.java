@@ -54,7 +54,8 @@ public class CleanroomCache {
         CleanroomMultiMcPack multiMcPack = CleanroomMultiMcPack.of(this.version, multiMcPackZip);
         // CleanroomInstaller installer = CleanroomInstaller.of(this.version, installerJar);
 
-        multiMcPack.install(this.release.getMultiMcPackArtifact().downloadUrl, this.release.commitHash, CacheUtils.HashAlgorithm.SHA256);
+        CleanroomRelease.Asset mmcPackArtifact = this.release.getMultiMcPackArtifact();
+        multiMcPack.install(mmcPackArtifact.downloadUrl, mmcPackArtifact.getDigestHash(), mmcPackArtifact.getDigestAlgorithm());
 
         if (!Files.exists(lwjglJson) || !Files.exists(forgeJson) || !Files.exists(minecraftJson) || !Files.exists(universalJar)) {
             multiMcPack.extract(this);

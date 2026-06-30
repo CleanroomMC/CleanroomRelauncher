@@ -76,6 +76,30 @@ public class CacheUtils {
         public String getHash(Function<HashFunction, HashCode> function) {
             return function.apply(hashFunction).toString();
         }
+
+        public static HashAlgorithm fromName(String name) {
+            if (name == null) {
+                return null;
+            }
+            switch (name.trim().toLowerCase()) {
+                case "md5":
+                    return MD5;
+                case "sha1":
+                case "sha-1":
+                    return SHA1;
+                case "sha256":
+                case "sha-256":
+                    return SHA256;
+                case "sha384":
+                case "sha-384":
+                    return SHA384;
+                case "sha512":
+                case "sha-512":
+                    return SHA512;
+                default:
+                    return null;
+            }
+        }
     }
 
 }

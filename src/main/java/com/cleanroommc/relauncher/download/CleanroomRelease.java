@@ -1,6 +1,7 @@
 package com.cleanroommc.relauncher.download;
 
 import com.cleanroommc.relauncher.CleanroomRelauncher;
+import com.cleanroommc.relauncher.util.CacheUtils;
 import com.google.gson.annotations.SerializedName;
 
 import java.io.IOException;
@@ -13,9 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static com.cleanroommc.relauncher.CleanroomRelauncher.CONFIG;
 
@@ -25,7 +24,6 @@ public class CleanroomRelease {
     private static final int CONNECT_TIMEOUT_MS = 5_000;
     private static final int READ_TIMEOUT_MS    = 15_000;
     private static final String USER_AGENT = "Mozilla/5.0 CleanroomRelauncher/1.0";
-    private static final Map<String, String> RELEASE_HASHES = new HashMap<>();
 
     public static List<CleanroomRelease> queryAll() throws IOException {
         long ttlM = Duration.ofHours(1).toMillis(); // TODO: configurable, this is temp
@@ -50,12 +48,6 @@ public class CleanroomRelease {
 
         // After fetching releases, save them to the cache
         saveReleasesToCache(CACHE_FILE, releases);
-        RELEASE_HASHES.clear();
-        for (CleanroomRelease release : releases) {
-            if (release.tagName != null && release.commitHash != null) {
-                RELEASE_HASHES.put(release.tagName, release.commitHash);
-            }
-        }
         return releases;
     }
 
@@ -134,12 +126,20 @@ public class CleanroomRelease {
 
     @Deprecated
     public Asset getMultiMcPackArtifact() {
+        Asset fallback = null;
         for (Asset asset : this.assets) {
-            if (asset.name.endsWith(".zip") && asset.name.contains("MMC")) {
+            String lowerName = asset.name.toLowerCase();
+            if (!lowerName.endsWith(".zip")) {
+                continue;
+            }
+            if (asset.name.contains("MMC")) {
                 return asset;
             }
+            if (fallback == null || lowerName.contains("cleanroom")) {
+                fallback = asset;
+            }
         }
-        return null;
+        return fallback;
     }
 
     public static class Asset {
@@ -147,7 +147,30 @@ public class CleanroomRelease {
         public String name;
         @SerializedName("browser_download_url")
         public String downloadUrl;
+        public String digest;
         public long size;
+
+        public CacheUtils.HashAlgorithm getDigestAlgorithm() {
+            if (this.digest == null) {
+                return null;
+            }
+            int separator = this.digest.indexOf(':');
+            if (separator < 0) {
+                return null;
+            }
+            return CacheUtils.HashAlgorithm.fromName(this.digest.substring(0, separator));
+        }
+
+        public String getDigestHash() {
+            if (this.digest == null) {
+                return null;
+            }
+            int separator = this.digest.indexOf(':');
+            if (separator < 0 || separator == this.digest.length() - 1) {
+                return null;
+            }
+            return this.digest.substring(separator + 1).trim();
+        }
 
     }
 
