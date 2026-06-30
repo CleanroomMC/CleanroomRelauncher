@@ -68,7 +68,7 @@ public class RelauncherConfiguration {
     }
 
     public JavaVersion getJavaTarget() {
-        return JavaVersion.parseOrThrow(String.valueOf(targetJavaVersion));
+        return JavaVersion.parseOrThrow(targetJavaVersion > 0 ? targetJavaVersion : 25);
     }
 
     public String getJavaExecutablePath() {
