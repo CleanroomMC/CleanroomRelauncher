@@ -18,13 +18,11 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.Future;
 
-import static com.cleanroommc.relauncher.util.CacheUtils.deleteFile;
-
 public final class GlobalDownloader {
 
     public static final GlobalDownloader INSTANCE = new GlobalDownloader();
 
-    private final List<ForkJoinTask> downloads = new ArrayList<>();
+    private final List<ForkJoinTask<?>> downloads = new ArrayList<>();
 
     public ForkJoinTask<?> from(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
         URI uri;
@@ -58,33 +56,45 @@ public final class GlobalDownloader {
                 }
             }
         });
-        this.downloads.add(task);
+        synchronized (this.downloads) {
+            this.downloads.add(task);
+        }
         return task;
     }
 
     public void immediatelyFrom(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
-
+        ForkJoinTask<?> task = this.from(source, destination, expectedHash, algo);
         try {
-            this.from(source, destination, expectedHash, algo).get();
+            task.get();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Unable to complete download", e);
+        } finally {
+            synchronized (this.downloads) {
+                this.downloads.remove(task);
+            }
         }
     }
 
     public void blockUntilFinished(LoadingGUI loading) {
-        int total = this.downloads.size();
+        List<ForkJoinTask<?>> downloadsToWaitFor;
+        synchronized (this.downloads) {
+            downloadsToWaitFor = new ArrayList<>(this.downloads);
+            this.downloads.clear();
+        }
+
+        int total = downloadsToWaitFor.size();
         int completed = 0;
         int last = 0;
-        for (Future download : this.downloads) {
+        for (Future download : downloadsToWaitFor) {
             try {
                 download.get();
                 completed++;
                 int percentage = (completed * 100) / total;
                 if (percentage % 10 == 0 && last != percentage) {
                     last = percentage;
-                    loading.updateStatus("Download Progress: "+completed+" / "+total+" | "+percentage+"% completed.");
+                    loading.updateStatus("Download Progress: " + completed + "/" + total + " | " + percentage + "% completed.");
                     loading.setProgress(percentage);
-                    CleanroomRelauncher.LOGGER.info("Download Progress: {} / {} | {}% completed.", completed, total, percentage);
+                    CleanroomRelauncher.LOGGER.info("Download Progress: {}/{} | {}% completed.", completed, total, percentage);
                 }
             } catch (InterruptedException | ExecutionException e) {
                 SwingUtilities.invokeLater(loading::close);
