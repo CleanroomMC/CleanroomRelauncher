@@ -1,12 +1,16 @@
 package com.cleanroommc.relauncher.download;
 
+import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.download.cache.CleanroomCache;
+import com.cleanroommc.relauncher.util.CacheUtils;
 
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import static com.cleanroommc.relauncher.util.CacheUtils.deleteFile;
 
 public class CleanroomInstaller implements CleanroomZipArtifact {
 
@@ -23,9 +27,14 @@ public class CleanroomInstaller implements CleanroomZipArtifact {
     }
 
     @Override
-    public void install(String url) {
-        if (!Files.exists(this.location)) {
-            GlobalDownloader.INSTANCE.immediatelyFrom(url, this.location.toFile());
+    public void install(String url, String expectedHash, CacheUtils.HashAlgorithm algo) {
+        try{
+            if (!Files.exists(this.location) || CacheUtils.isFileCorrupt(this.location.toFile(), expectedHash, algo)) {
+                GlobalDownloader.INSTANCE.immediatelyFrom(url, this.location.toFile(), expectedHash, algo);
+            }
+        } catch (IOException e){
+            CleanroomRelauncher.LOGGER.error("Error during installation", e);
+            deleteFile(this.location.toFile());
         }
     }
 

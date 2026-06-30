@@ -1,9 +1,9 @@
 package com.cleanroommc.relauncher.config;
 
+import com.cleanroommc.javautils.api.JavaDistro;
+import com.cleanroommc.javautils.api.JavaVersion;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.util.enums.ArgsEnum;
-import com.cleanroommc.relauncher.util.enums.JavaTargetsEnum;
-import com.cleanroommc.relauncher.util.enums.VendorsEnum;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
@@ -15,7 +15,9 @@ import java.nio.file.Path;
 
 public class RelauncherConfiguration {
 
-    public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    public static final Gson GSON = new GsonBuilder()
+            .setPrettyPrinting()
+            .create();
     public static final Path FILE = Launch.minecraftHome.toPath().resolve("config/relauncher.json");
 
     public static RelauncherConfiguration read() {
@@ -35,9 +37,9 @@ public class RelauncherConfiguration {
     @SerializedName("latestVersion")
     private String latestCleanroomVersion;
     @SerializedName("targetJavaVersion")
-    private JavaTargetsEnum targetJavaVersion;
+    private int targetJavaVersion;
     @SerializedName("targetVendor")
-    private VendorsEnum targetVendor;
+    private String targetVendor;
     @SerializedName("javaPath")
     private String javaExecutablePath;
     @SerializedName("args")
@@ -46,6 +48,12 @@ public class RelauncherConfiguration {
     private boolean autoSetup;
     @SerializedName("enableRelauncher")
     private boolean enableRelauncher=true;
+    @SerializedName("FetchUpdates")
+    private boolean FetchUpdates=true;
+    @SerializedName("clearCleanroomFolder")
+    private boolean clearCleanroomFolder=false;
+    @SerializedName("clearJavaProvisionFolder")
+    private boolean clearJavaProvisionFolder=false;
 
     public String getCleanroomVersion() {
         return cleanroomVersion;
@@ -55,12 +63,12 @@ public class RelauncherConfiguration {
         return latestCleanroomVersion;
     }
 
-    public VendorsEnum getJavaVendor() {
-        return targetVendor;
+    public JavaDistro getJavaVendor() {
+        return JavaDistro.match(targetVendor);
     }
 
-    public JavaTargetsEnum getJavaTarget() {
-        return targetJavaVersion;
+    public JavaVersion getJavaTarget() {
+        return JavaVersion.parseOrThrow(String.valueOf(targetJavaVersion));
     }
 
     public String getJavaExecutablePath() {
@@ -77,6 +85,17 @@ public class RelauncherConfiguration {
 
     public boolean getRelauncherEnabled() {
         return enableRelauncher;
+    }
+
+    public boolean getFetchUpdatesEnabled() {
+        return FetchUpdates;
+    }
+
+    public boolean getClearCleanroomFolderEnabled() {
+        return clearCleanroomFolder;
+    }
+    public boolean getClearJavaProvisionFolderEnabled() {
+        return clearJavaProvisionFolder;
     }
 
     public void setCleanroomVersion(String cleanroomVersion) {
@@ -103,12 +122,19 @@ public class RelauncherConfiguration {
         this.enableRelauncher= enableRelauncher;
     }
 
-    public void setTargetJavaVersion(JavaTargetsEnum targetJavaVersion) {
-        this.targetJavaVersion = targetJavaVersion;
+    public void setTargetJavaVersion(JavaVersion targetJavaVersion) {
+        this.targetJavaVersion = targetJavaVersion.major();
     }
 
-    public void setTargetVendor(VendorsEnum targetVendor) {
-        this.targetVendor = targetVendor;
+    public void setTargetVendor(JavaDistro targetVendor) {
+        this.targetVendor = targetVendor.name();
+    }
+
+    public void setClearCleanroomFolder(boolean value) {
+        this.clearCleanroomFolder = value;
+    }
+    public void setClearJavaProvisionFolder(boolean value) {
+        this.clearJavaProvisionFolder = value;
     }
 
     public void save() {

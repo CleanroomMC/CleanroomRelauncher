@@ -1,7 +1,7 @@
 package com.cleanroommc.relauncher.gui;
+import com.cleanroommc.javautils.api.JavaDistro;
+import com.cleanroommc.javautils.api.JavaVersion;
 import com.cleanroommc.relauncher.download.CleanroomRelease;
-import com.cleanroommc.relauncher.util.enums.JavaTargetsEnum;
-import com.cleanroommc.relauncher.util.enums.VendorsEnum;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
@@ -53,8 +53,8 @@ public class GUIRelauncherMenu extends GuiScreen {
                 AtomicReference<String> selectedVersion = new AtomicReference<>(CONFIG.getCleanroomVersion());
                 AtomicReference<String> javaPath = new AtomicReference<>(CONFIG.getJavaExecutablePath());
                 AtomicReference<String> javaArgs = new AtomicReference<>(CONFIG.getJavaArguments());
-                AtomicReference<JavaTargetsEnum> javaTarget = new AtomicReference<>(CONFIG.getJavaTarget());
-                AtomicReference<VendorsEnum> javaVendor = new AtomicReference<>(CONFIG.getJavaVendor());
+                AtomicReference<JavaVersion> javaTarget = new AtomicReference<>(CONFIG.getJavaTarget());
+                AtomicReference<JavaDistro> javaVendor = new AtomicReference<>(CONFIG.getJavaVendor());
                 AtomicBoolean autoSetup = new AtomicBoolean(CONFIG.getAutoSetup());
                 CleanroomRelease resolvedSelected = null;
                 if (selectedVersion.get() != null) {
@@ -67,8 +67,8 @@ public class GUIRelauncherMenu extends GuiScreen {
                 }
                 final String fJavaPath = javaPath.get();
                 final String fJavaArgs = javaArgs.get();
-                final VendorsEnum fJavaVendor = javaVendor.get();
-                final JavaTargetsEnum fJavaTarget = javaTarget.get();
+                final JavaDistro fJavaVendor = javaVendor.get();
+                final JavaVersion fJavaTarget = javaTarget.get();
                 final CleanroomRelease fSelected = resolvedSelected;
                 final boolean fAutoSetup = autoSetup.get();
                 SwingUtilities.invokeLater(() -> {

@@ -13,11 +13,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import static com.cleanroommc.relauncher.CleanroomRelauncher.CONFIG;
 
 public class CleanroomRelease {
 
     private static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
+    private static final int CONNECT_TIMEOUT_MS = 5_000;
+    private static final int READ_TIMEOUT_MS    = 15_000;
+    private static final String USER_AGENT = "Mozilla/5.0 CleanroomRelauncher/1.0";
+    private static final Map<String, String> RELEASE_HASHES = new HashMap<>();
 
     public static List<CleanroomRelease> queryAll() throws IOException {
         long ttlM = Duration.ofHours(1).toMillis(); // TODO: configurable, this is temp
@@ -27,7 +35,8 @@ public class CleanroomRelease {
                 long fileModifiedM = Files.getLastModifiedTime(CACHE_FILE).toMillis();
                 long nowM = System.currentTimeMillis();
                 long diffM = nowM - fileModifiedM;
-                if (diffM < ttlM) {
+                boolean cacheIsFresh = diffM < ttlM;
+                if (!CONFIG.getFetchUpdatesEnabled() || cacheIsFresh) {
                     return fetchReleasesFromCache(CACHE_FILE);
                 }
             } catch (Throwable t) {
@@ -41,6 +50,12 @@ public class CleanroomRelease {
 
         // After fetching releases, save them to the cache
         saveReleasesToCache(CACHE_FILE, releases);
+        RELEASE_HASHES.clear();
+        for (CleanroomRelease release : releases) {
+            if (release.tagName != null && release.commitHash != null) {
+                RELEASE_HASHES.put(release.tagName, release.commitHash);
+            }
+        }
         return releases;
     }
 
@@ -49,7 +64,11 @@ public class CleanroomRelease {
             URL url = new URL("https://api.github.com/repos/CleanroomMC/Cleanroom/releases");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
+            connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(READ_TIMEOUT_MS);
             connection.setRequestProperty("Accept", "application/vnd.github.v3+json");
+            connection.setRequestProperty("User-Agent", USER_AGENT);
+            connection.setInstanceFollowRedirects(false);
 
             if (connection.getResponseCode() != 200) {
                 throw new IOException("Failed to fetch releases: HTTP error code " + connection.getResponseCode());
@@ -100,6 +119,8 @@ public class CleanroomRelease {
     public String name;
     @SerializedName("tag_name")
     public String tagName;
+    @SerializedName("target_commitish")
+    public String commitHash;
     public List<Asset> assets;
 
     public Asset getInstallerArtifact() {

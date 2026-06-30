@@ -2,8 +2,10 @@ package com.cleanroommc.relauncher.download;
 
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.gui.LoadingGUI;
+import com.cleanroommc.relauncher.util.CacheUtils;
 import org.apache.commons.io.FileUtils;
 
+import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -16,13 +18,15 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.Future;
 
+import static com.cleanroommc.relauncher.util.CacheUtils.deleteFile;
+
 public final class GlobalDownloader {
 
     public static final GlobalDownloader INSTANCE = new GlobalDownloader();
 
     private final List<ForkJoinTask> downloads = new ArrayList<>();
 
-    public void from(String source, File destination) {
+    public ForkJoinTask<?> from(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
         URI uri;
         URL url;
         try {
@@ -31,34 +35,47 @@ public final class GlobalDownloader {
         } catch (MalformedURLException e) {
             throw new RuntimeException(String.format("Unable to construct url %s", source), e);
         }
-        this.downloads.add(ForkJoinPool.commonPool().submit(() -> {
+        final String cleanHash = expectedHash != null ? expectedHash.trim() : null;
+        ForkJoinTask<?> task = ForkJoinPool.commonPool().submit(() -> {
             try {
                 FileUtils.copyURLToFile(url, destination);
                 CleanroomRelauncher.LOGGER.debug("Downloaded {} to {}", uri.toString(), destination.getAbsolutePath());
             } catch (IOException e) {
                 throw new RuntimeException(String.format("Unable to download %s to %s", url, destination), e);
             }
-        }));
+            if (cleanHash != null && algo != null) {
+                try {
+                    if (CacheUtils.isFileCorrupt(destination, cleanHash, algo)) {
+                        destination.delete(); // Don't leave a corrupt file on disk
+                        throw new RuntimeException(String.format(
+                                "Hash mismatch for %s — expected %s (%s) but got %s",
+                                destination, cleanHash, algo.name(),
+                                CacheUtils.hash(destination, algo) // recompute only for the error message
+                        ));
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to hash-check downloaded file: " + destination, e);
+                }
+            }
+        });
+        this.downloads.add(task);
+        return task;
     }
 
-    public void immediatelyFrom(String source, File destination) {
-        this.from(source, destination);
+    public void immediatelyFrom(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
+
         try {
-            this.downloads.remove(this.downloads.size() - 1).get();
+            this.from(source, destination, expectedHash, algo).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Unable to complete download", e);
         }
     }
 
-    public void blockUntilFinished() {
+    public void blockUntilFinished(LoadingGUI loading) {
         int total = this.downloads.size();
         int completed = 0;
         int last = 0;
-        LoadingGUI loading = new LoadingGUI();
-        loading.enableProgress();
-        loading.updateStatus("Downloading Cleanroom files and libraries...");
         for (Future download : this.downloads) {
-            loading.show();
             try {
                 download.get();
                 completed++;
@@ -70,20 +87,19 @@ public final class GlobalDownloader {
                     CleanroomRelauncher.LOGGER.info("Download Progress: {} / {} | {}% completed.", completed, total, percentage);
                 }
             } catch (InterruptedException | ExecutionException e) {
-                loading.close();
+                SwingUtilities.invokeLater(loading::close);
                 throw new RuntimeException("Unable to complete download", e);
             }
         }
-        loading.disableProgress();
-        loading.updateStatus("Download Complete");
+        SwingUtilities.invokeLater(() -> {
+            loading.disableProgress();
+            loading.updateStatus("Download Complete");
+        });
         try{
             Thread.sleep(500);
         } catch (InterruptedException e){
           CleanroomRelauncher.LOGGER.warn("Interrupted thread sleep",e);
-          loading.close();
         }
-        loading.close();
-        loading.updateStatus("Initialising..");
 
     }
 

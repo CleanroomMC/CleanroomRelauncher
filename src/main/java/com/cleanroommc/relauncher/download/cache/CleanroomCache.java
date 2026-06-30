@@ -5,6 +5,8 @@ import com.cleanroommc.relauncher.download.CleanroomMultiMcPack;
 import com.cleanroommc.relauncher.download.CleanroomRelease;
 import com.cleanroommc.relauncher.download.GlobalDownloader;
 import com.cleanroommc.relauncher.download.schema.Version;
+import com.cleanroommc.relauncher.gui.LoadingGUI;
+import com.cleanroommc.relauncher.util.CacheUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,6 +31,10 @@ public class CleanroomCache {
     }
 
     public List<Version> download() throws IOException {
+        LoadingGUI loading = new LoadingGUI();
+        loading.enableProgress();
+        loading.updateStatus("Downloading Cleanroom files and libraries...");
+
         if (!Files.isDirectory(this.directory)) {
             Files.createDirectories(this.directory);
         }
@@ -48,7 +54,7 @@ public class CleanroomCache {
         CleanroomMultiMcPack multiMcPack = CleanroomMultiMcPack.of(this.version, multiMcPackZip);
         // CleanroomInstaller installer = CleanroomInstaller.of(this.version, installerJar);
 
-        multiMcPack.install(this.release.getMultiMcPackArtifact().downloadUrl);
+        multiMcPack.install(this.release.getMultiMcPackArtifact().downloadUrl, this.release.commitHash, CacheUtils.HashAlgorithm.SHA256);
 
         if (!Files.exists(lwjglJson) || !Files.exists(forgeJson) || !Files.exists(minecraftJson) || !Files.exists(universalJar)) {
             multiMcPack.extract(this);
@@ -75,13 +81,14 @@ public class CleanroomCache {
         for (Version version : versions) {
             version.downloadLibraries(librariesDirectory);
         }
-
-        GlobalDownloader.INSTANCE.blockUntilFinished();
+        loading.show();
+        GlobalDownloader.INSTANCE.blockUntilFinished(loading);
 
         for (Version version : versions) {
             version.extractNatives(librariesDirectory, nativesDirectory);
         }
-
+        loading.close();
+        loading.updateStatus("Initialising..");
         // return version;
         return versions;
     }
