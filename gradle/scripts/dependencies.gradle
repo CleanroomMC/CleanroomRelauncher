@@ -34,7 +34,7 @@ configurations {
 }
 
 dependencies {
-    shade ('com.cleanroommc:java-utils:2.1.1-fix1') {
+    shade ('com.cleanroommc:java-utils:2.1.2') {
         exclude group: 'org.slf4j', module: 'slf4j-simple'
     }
     // Example - Dependency descriptor:
