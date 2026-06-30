@@ -36,11 +36,14 @@ public class CleanroomMultiMcPack implements CleanroomZipArtifact {
             Files.copy(jar.getPath("/patches/net.minecraft.json"), cache.getMinecraftJson(), StandardCopyOption.REPLACE_EXISTING);
             Files.copy(jar.getPath("/patches/net.minecraftforge.json"), cache.getForgeJson(), StandardCopyOption.REPLACE_EXISTING);
             Files.copy(jar.getPath("/patches/org.lwjgl3.json"), cache.getLwjglVersionJson(), StandardCopyOption.REPLACE_EXISTING);
-            try (Stream<Path> stream = Files.walk(jar.getPath("/libraries/"))) {
-                // Not valid ever since 0.3.19
-                Optional<Path> universalJar = stream.filter(Files::isRegularFile).findFirst();
-                if (universalJar.isPresent()) {
-                    Files.copy(universalJar.get(), cache.getUniversalJar(), StandardCopyOption.REPLACE_EXISTING);
+
+            Path libs = jar.getPath("/libraries/");
+            if (Files.exists(libs)) {
+                try (Stream<Path> stream = Files.walk(libs)) {
+                    Optional<Path> embeddedUniversalJar = stream.filter(Files::isRegularFile).findFirst();
+                    if (embeddedUniversalJar.isPresent()) {
+                        Files.copy(embeddedUniversalJar.get(), cache.getUniversalJar(), StandardCopyOption.REPLACE_EXISTING);
+                    }
                 }
             }
         }
