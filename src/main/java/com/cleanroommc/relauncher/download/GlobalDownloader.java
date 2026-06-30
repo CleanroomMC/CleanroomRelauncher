@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -36,24 +38,10 @@ public final class GlobalDownloader {
         final String cleanHash = expectedHash != null ? expectedHash.trim() : null;
         ForkJoinTask<?> task = ForkJoinPool.commonPool().submit(() -> {
             try {
-                FileUtils.copyURLToFile(url, destination);
+                downloadToVerifiedFile(url, destination, cleanHash, algo);
                 CleanroomRelauncher.LOGGER.debug("Downloaded {} to {}", uri.toString(), destination.getAbsolutePath());
             } catch (IOException e) {
                 throw new RuntimeException(String.format("Unable to download %s to %s", url, destination), e);
-            }
-            if (cleanHash != null && algo != null) {
-                try {
-                    if (CacheUtils.isFileCorrupt(destination, cleanHash, algo)) {
-                        destination.delete(); // Don't leave a corrupt file on disk
-                        throw new RuntimeException(String.format(
-                                "Hash mismatch for %s — expected %s (%s) but got %s",
-                                destination, cleanHash, algo.name(),
-                                CacheUtils.hash(destination, algo) // recompute only for the error message
-                        ));
-                    }
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to hash-check downloaded file: " + destination, e);
-                }
             }
         });
         synchronized (this.downloads) {
@@ -105,12 +93,32 @@ public final class GlobalDownloader {
             loading.disableProgress();
             loading.updateStatus("Download Complete");
         });
-        try{
+        try {
             Thread.sleep(500);
-        } catch (InterruptedException e){
-          CleanroomRelauncher.LOGGER.warn("Interrupted thread sleep",e);
+        } catch (InterruptedException e) {
+            CleanroomRelauncher.LOGGER.warn("Interrupted thread sleep", e);
         }
+    }
 
+    private static void downloadToVerifiedFile(URL url, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) throws IOException {
+        File parent = destination.getParentFile();
+        if (parent != null) {
+            Files.createDirectories(parent.toPath());
+        }
+        File temp = new File(destination.getAbsolutePath() + ".tmp");
+        try {
+            FileUtils.copyURLToFile(url, temp);
+            if (expectedHash != null && algo != null) {
+                String actualHash = CacheUtils.hash(temp, algo);
+                if (!expectedHash.equalsIgnoreCase(actualHash)) {
+                    throw new IOException(String.format("Hash mismatch for %s - expected %s (%s) but got %s",
+                            destination, expectedHash, algo.name(), actualHash));
+                }
+            }
+            Files.move(temp.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(temp.toPath());
+        }
     }
 
 }
