@@ -25,6 +25,8 @@ public class JavaProvisioning {
     public static String validateOrProvisionJava(String path, JavaVersion target, JavaDistro vendor) {
         LoadingGUI loading = new LoadingGUI();
         loading.show();
+        JavaVersion provisioningTarget = target == null ? JavaVersion.parseOrThrow(25) : target;
+        JavaDistro provisioningVendor = vendor == null ? JavaDistro.ZULU : vendor;
 
         JavaProvisioner provisioner = JavaProvisioner.provisioners().stream()
                 .findFirst()
@@ -34,20 +36,18 @@ public class JavaProvisioning {
             try{
                 loading.updateStatus("Checking provided path...");
                 CleanroomRelauncher.LOGGER.info("Checking path: {}", path);
-                if (target == null && vendor == null && testJava(path)){
-                    return path;
-                } else if(target != null && vendor !=null && testJava(path, vendor, target)){
+                if(testJava(path, vendor, target)){
                     return path;
                 }
                 CleanroomRelauncher.LOGGER.warn("Invalid path, Fetching a new java instance");
-                loading.updateStatus("Scanning for Java " + target.major() + " Installations ...");
-                String binaryPath = getBinaryPath(target, vendor, loading);
+                loading.updateStatus("Scanning for Java " + provisioningTarget.major() + " Installations ...");
+                String binaryPath = getBinaryPath(provisioningTarget, provisioningVendor, loading);
                 if(binaryPath != null){
                     return binaryPath;
                 }
                 loading.updateStatus("No Java found. Downloading...");
                 CleanroomRelauncher.LOGGER.warn("Found no available Java installation, Auto-provisioning..");
-                return autoProvisionJavaInstall(target, vendor, loading, provisioner);
+                return autoProvisionJavaInstall(provisioningTarget, provisioningVendor, loading, provisioner);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             } finally {
@@ -55,15 +55,15 @@ public class JavaProvisioning {
             }
         } else{
             try {
-                loading.updateStatus("Scanning for Java " + target.major() + " Installations ...");
+                loading.updateStatus("Scanning for Java " + provisioningTarget.major() + " Installations ...");
 
-                String binaryPath = getBinaryPath(target, vendor, loading);
+                String binaryPath = getBinaryPath(provisioningTarget, provisioningVendor, loading);
                 if(binaryPath != null){
                     return binaryPath;
                 }
                 loading.close();
                 loading.updateStatus("No Valid Java found. Downloading...");
-                return autoProvisionJavaInstall(target, vendor, loading, provisioner);
+                return autoProvisionJavaInstall(provisioningTarget, provisioningVendor, loading, provisioner);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             } finally {
@@ -80,10 +80,7 @@ public class JavaProvisioning {
                 .map(JavaLocator::all)
                 .flatMap(Collection::stream)
                 .filter(j -> j.version().major() == target.major())
-                .filter(javaInstall -> {
-                    if (vendor == JavaDistro.UNKNOWN || vendor == null) return true;
-                    return javaInstall.distro().name().toLowerCase().contains(vendor.name().toLowerCase());
-                })
+                .filter(javaInstall -> matchesVendor(javaInstall.distro(), vendor))
                 .distinct()
                 .sorted()
                 .collect(Collectors.toList());
@@ -114,11 +111,35 @@ public class JavaProvisioning {
     private static boolean testJava(String javaPath, JavaDistro vendor, JavaVersion target) {
         try{
             JavaInstall javaInstall = JavaUtils.parseInstall(javaPath);
-            return javaInstall.version().major() == target.major() && javaInstall.distro().name().toLowerCase().contains(vendor.name().toLowerCase());
+            boolean validVersion = target == null ? javaInstall.version().major() >= 21 : javaInstall.version().major() == target.major();
+            boolean validVendor = matchesVendor(javaInstall.distro(), vendor);
+            if (!validVersion || !validVendor) {
+                CleanroomRelauncher.LOGGER.warn("Java path {} resolved to Java {} from {}, but expected {}{}",
+                        javaPath, javaInstall.version(), javaInstall.distro(),
+                        target == null ? "Java 21+" : "Java " + target.major(),
+                        vendor == null || vendor == JavaDistro.UNKNOWN ? "" : " from " + vendor
+                );
+            }
+            return validVersion && validVendor;
         } catch (IOException e) {
             CleanroomRelauncher.LOGGER.error("Encountered an error checking the path", e);
             return false;
         }
+    }
+
+    private static boolean matchesVendor(JavaDistro actual, JavaDistro expected) {
+        if (expected == null || expected == JavaDistro.UNKNOWN) {
+            return true;
+        }
+        if (actual == null) {
+            return false;
+        }
+        if (actual == expected || actual.name().equalsIgnoreCase(expected.name())) {
+            return true;
+        }
+        String actualFoojayId = actual.foojayId();
+        String expectedFoojayId = expected.foojayId();
+        return actualFoojayId != null && expectedFoojayId != null && actualFoojayId.equalsIgnoreCase(expectedFoojayId);
     }
 
     private static String autoProvisionJavaInstall(JavaVersion target, JavaDistro vendor, LoadingGUI loading, JavaProvisioner provisioner) {

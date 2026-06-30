@@ -261,9 +261,7 @@ public class CleanroomRelauncher {
                 CONFIG.setLatestCleanroomVersion(latestRelease.name);
                 CONFIG.setJavaExecutablePath(javaPath);
                 CONFIG.setJavaArguments(javaArgs);
-                CONFIG.setTargetVendor(javaVendor);
-                CONFIG.setTargetJavaVersion(javaTarget);
-                CONFIG.setAutoSetup(autoSetup);
+                CONFIG.setJavaSelectionMode(autoSetup, javaTarget, javaVendor);
 
                 CONFIG.save();
 
@@ -327,7 +325,7 @@ public class CleanroomRelauncher {
                     CONFIG.setTargetVendor(javaVendor);
                 }
                 CONFIG.setCleanroomVersion(selected.name);
-                CONFIG.setAutoSetup(autoSetup);
+                CONFIG.setJavaSelectionMode(autoSetup, javaTarget, javaVendor);
                 CONFIG.save();
 
 

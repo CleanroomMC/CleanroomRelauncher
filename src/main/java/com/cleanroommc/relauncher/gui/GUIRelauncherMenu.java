@@ -92,9 +92,7 @@ public class GUIRelauncherMenu extends GuiScreen {
                         CONFIG.setLatestCleanroomVersion(latestRelease.name);
                         CONFIG.setJavaExecutablePath(javaPath.get());
                         CONFIG.setJavaArguments(javaArgs.get());
-                        CONFIG.setTargetVendor(javaVendor.get());
-                        CONFIG.setTargetJavaVersion(javaTarget.get());
-                        CONFIG.setAutoSetup(autoSetup.get());
+                        CONFIG.setJavaSelectionMode(autoSetup.get(), javaTarget.get(), javaVendor.get());
 
                         CONFIG.save();
                     }
