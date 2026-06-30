@@ -41,7 +41,7 @@ public final class GlobalDownloader {
                 downloadToVerifiedFile(url, destination, cleanHash, algo);
                 CleanroomRelauncher.LOGGER.debug("Downloaded {} to {}", uri.toString(), destination.getAbsolutePath());
             } catch (IOException e) {
-                throw new RuntimeException(String.format("Unable to download %s to %s", url, destination), e);
+                throw new DownloadException(url, destination, e);
             }
         });
         synchronized (this.downloads) {
@@ -54,8 +54,11 @@ public final class GlobalDownloader {
         ForkJoinTask<?> task = this.from(source, destination, expectedHash, algo);
         try {
             task.get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException("Unable to complete download", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while waiting for download", e);
+        } catch (ExecutionException e) {
+            throw unwrapDownloadFailure(e);
         } finally {
             synchronized (this.downloads) {
                 this.downloads.remove(task);
@@ -86,7 +89,11 @@ public final class GlobalDownloader {
                 }
             } catch (InterruptedException | ExecutionException e) {
                 SwingUtilities.invokeLater(loading::close);
-                throw new RuntimeException("Unable to complete download", e);
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted while waiting for downloads", e);
+                }
+                throw unwrapDownloadFailure((ExecutionException) e);
             }
         }
         SwingUtilities.invokeLater(() -> {
@@ -105,7 +112,11 @@ public final class GlobalDownloader {
         if (parent != null) {
             Files.createDirectories(parent.toPath());
         }
-        File temp = new File(destination.getAbsolutePath() + ".tmp");
+        File temp = Files.createTempFile(
+                parent != null ? parent.toPath() : destination.toPath().toAbsolutePath().getParent(),
+                destination.getName() + ".",
+                ".tmp"
+        ).toFile();
         try {
             FileUtils.copyURLToFile(url, temp);
             if (expectedHash != null && algo != null) {
@@ -117,7 +128,26 @@ public final class GlobalDownloader {
             }
             Files.move(temp.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } finally {
-            Files.deleteIfExists(temp.toPath());
+            try {
+                Files.deleteIfExists(temp.toPath());
+            } catch (IOException e) {
+                CleanroomRelauncher.LOGGER.warn("Failed to delete temporary download file {}", temp, e);
+            }
+        }
+    }
+
+    private static RuntimeException unwrapDownloadFailure(ExecutionException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof RuntimeException) {
+            return (RuntimeException) cause;
+        }
+        return new RuntimeException("Unable to complete download", cause);
+    }
+
+    private static final class DownloadException extends RuntimeException {
+
+        private DownloadException(URL url, File destination, IOException cause) {
+            super(String.format("Unable to download %s to %s", url, destination), cause);
         }
     }
 
