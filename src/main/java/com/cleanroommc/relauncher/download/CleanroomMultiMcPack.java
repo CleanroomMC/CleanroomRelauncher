@@ -25,7 +25,7 @@ public class CleanroomMultiMcPack implements CleanroomZipArtifact {
 
     @Override
     public void install(String url, String expectedHash, CacheUtils.HashAlgorithm algo) throws IOException {
-        if (!Files.exists(this.location)) {
+        if (!Files.exists(this.location) || CacheUtils.isFileCorrupt(this.location.toFile(), expectedHash, algo)) {
             GlobalDownloader.INSTANCE.immediatelyFrom(url, this.location.toFile(), expectedHash, algo);
         }
     }
