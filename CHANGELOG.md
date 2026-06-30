@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.0] - 2026-06-30
+
+### Added
+- Download hash validation for Cleanroom packs and libraries
+- Configuration options to clear the relauncher cache folder and provisioned Java folder
+- Option to disable querying GitHub for release updates
+
+### Fixed
+- Incompatibility with new file names
+- Update notification behavior to avoid redundant prompts
+- Redundant release/config save calls during relaunch setup
+- Temurin vendor matching/internal naming
+
+### Changed
+- Reworked Java provisioning to use JavaUtils'S provisioning APIs
+- Improved cache deletion by walking files safely before removal
+- Added network timeouts and request headers when querying GitHub releases
+
 ## [0.5.0] - 2026-05-11
 
 ### Added
