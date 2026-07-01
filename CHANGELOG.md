@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1] - 2026-07-02
+
+### Changed
+- Stopped shading in `com.google.code.gson` in relauncher
+- Shade in `org.apache.commons.compress` version `1.28.0` to avoid issues
+
 ## [0.6.0] - 2026-06-30
 
 ### Added
@@ -14,7 +20,7 @@
 - Temurin vendor matching/internal naming
 
 ### Changed
-- Reworked Java provisioning to use JavaUtils'S provisioning APIs
+- Reworked Java provisioning to use JavaUtils's provisioning APIs
 - Improved cache deletion by walking files safely before removal
 - Added network timeouts and request headers when querying GitHub releases
 

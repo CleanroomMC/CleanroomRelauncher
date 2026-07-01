@@ -34,6 +34,9 @@ tasks.shadowJar {
     relocate 'com.cleanroommc.javautils', 'com.cleanroommc.relauncher.shade.javautils'
     relocate 'com.cleanroommc.platformutils', 'com.cleanroommc.relauncher.shade.platformutils'
     relocate 'org.slf4j', 'com.cleanroommc.relauncher.shade.slf4j'
+    // We're keeping commons.compress and shading it as the older 1.12.2 version has:
+    // https://www.mend.io/vulnerability-database/CVE-2021-35517/
+    relocate 'org.apache.commons.compress', 'com.cleanroommc.relauncher.shade.commons.compress'
 
     mergeServiceFiles()
 }
