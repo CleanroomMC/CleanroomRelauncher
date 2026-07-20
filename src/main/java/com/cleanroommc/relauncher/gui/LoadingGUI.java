@@ -1,10 +1,7 @@
 package com.cleanroommc.relauncher.gui;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
 import java.awt.*;
-
-import static com.cleanroommc.relauncher.CleanroomRelauncher.isJvm8Oracle;
 
 public class LoadingGUI {
 
@@ -13,55 +10,52 @@ public class LoadingGUI {
     private final JProgressBar progressBar;
 
     public LoadingGUI() {
-        frame = new JFrame("Cleanroom Relauncher Progress");
+        RelauncherUI.install();
+        frame = new JFrame("Cleanroom Relauncher");
         frame.setUndecorated(true);
-        frame.setSize(800,400);
-        frame.setLocationRelativeTo(null);
+        frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        frame.setSize(560, 300);
         frame.setLayout(new BorderLayout());
 
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(new Color(105, 126, 147));
+        JPanel panel = new JPanel(new BorderLayout(0, 22));
+        panel.setBackground(RelauncherUI.BACKGROUND);
         panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.GRAY),
-                BorderFactory.createEmptyBorder(15, 15, 15, 15)
+                BorderFactory.createLineBorder(RelauncherUI.BORDER),
+                BorderFactory.createEmptyBorder(30, 36, 32, 36)
         ));
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.BOTH;
-        statusLabel = new JLabel("Initializing..");
-        statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 16));
-        if (!isJvm8Oracle()) {
-            statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 30));
-        }
-        statusLabel.setForeground(Color.white);
-        gbc.gridy = 1;
-        gbc.weighty = 0.45;
-        gbc.weightx = 0.8;
-        panel.add(statusLabel, gbc);
-
-        progressBar = new JProgressBar();
-        if (!isJvm8Oracle()) {
-            progressBar.setPreferredSize(new Dimension(progressBar.getPreferredSize().width, 22));
-        }
-        progressBar.setIndeterminate(true);
-        progressBar.setForeground(new Color(62, 164, 168));
-        progressBar.setBackground(new Color(75, 90, 104));
-
-        gbc.gridy = 2;
-        gbc.weighty = 0.15;
-        gbc.weightx = 1;
-        panel.add(progressBar, gbc);
 
         ImageIcon rawIcon = new ImageIcon(
                 Toolkit.getDefaultToolkit().getImage(LoadingGUI.class.getResource("/cleanroom-relauncher.png")));
-        JLabel logo = new JLabel(new ImageIcon(rawIcon.getImage().getScaledInstance(160, 160, Image.SCALE_SMOOTH)));
-        logo.setAlignmentX(Component.CENTER_ALIGNMENT);
-        logo.setBorder(new EmptyBorder(50, 0, 50, 0));
+        frame.setIconImage(rawIcon.getImage());
 
-        gbc.gridy = 0;
-        gbc.weighty = 0.4;
-        gbc.weightx = 1;
-        panel.add(logo, gbc);
+        JPanel header = RelauncherUI.header(rawIcon.getImage(), "Preparing Cleanroom",
+                "This may take a moment. You can return to the game when it finishes.");
+        panel.add(header, BorderLayout.NORTH);
+
+        JPanel progressContent = new JPanel();
+        progressContent.setOpaque(false);
+        progressContent.setLayout(new BoxLayout(progressContent, BoxLayout.Y_AXIS));
+        statusLabel = new JLabel("Initializing…");
+        statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD, 14f));
+        statusLabel.setForeground(RelauncherUI.TEXT);
+        statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        progressContent.add(statusLabel);
+        progressContent.add(Box.createRigidArea(new Dimension(0, 10)));
+
+        progressBar = new JProgressBar();
+        progressBar.setAlignmentX(Component.LEFT_ALIGNMENT);
+        progressBar.setPreferredSize(new Dimension(480, 14));
+        progressBar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 14));
+        progressBar.setIndeterminate(true);
+        progressBar.setForeground(RelauncherUI.PRIMARY);
+        progressBar.setBackground(new Color(225, 232, 238));
+        progressBar.setBorderPainted(false);
+        progressContent.add(progressBar);
+        panel.add(progressContent, BorderLayout.CENTER);
+
         frame.add(panel, BorderLayout.CENTER);
+        RelauncherUI.styleTree(panel);
+        frame.setLocationRelativeTo(null);
     }
 
     public void show() {
@@ -82,12 +76,17 @@ public class LoadingGUI {
 
     public void setProgress(int percent) {
         SwingUtilities.invokeLater(() -> {
-            progressBar.setValue(percent);
+            int safePercent = Math.max(0, Math.min(100, percent));
+            progressBar.setValue(safePercent);
+            progressBar.setString(safePercent + "%");
         });
     }
 
     public void updateStatus(String status) {
-        SwingUtilities.invokeLater(() -> statusLabel.setText(status));
+        SwingUtilities.invokeLater(() -> {
+            statusLabel.setText(status);
+            statusLabel.setToolTipText(status);
+        });
     }
 
     public void close() {

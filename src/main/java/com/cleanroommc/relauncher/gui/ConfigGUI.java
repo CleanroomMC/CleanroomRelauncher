@@ -24,6 +24,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -34,25 +35,12 @@ import static com.cleanroommc.relauncher.CleanroomRelauncher.isJvm8;
 public class ConfigGUI extends JDialog {
 
     static {
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception ignore) { }
-        Font baseFont = new Font("SansSerif", Font.PLAIN, 12);
-        String[] fontKeys = {
-                "Button.font", "Label.font", "ComboBox.font",
-                "TextField.font", "CheckBox.font", "ToggleButton.font",
-                "Panel.font", "OptionPane.font", "List.font"
-        };
-        for (String key : fontKeys) {
-            UIManager.put(key, baseFont);
-        }
-        System.setProperty("awt.useSystemAAFontSettings","on");
-        System.setProperty("swing.aatext", "true");
+        RelauncherUI.install();
     }
     private static void scaleComponent(Component component, float scale) {
         // scaling rect
         if (component instanceof JTextField ||
-                component instanceof JButton ||
+                component instanceof AbstractButton ||
                 component instanceof JComboBox) {
             Dimension size = component.getPreferredSize();
             component.setPreferredSize(new Dimension((int) (size.width * scale) + 10, (int) (size.height * scale)));
@@ -75,7 +63,7 @@ public class ConfigGUI extends JDialog {
 
         // scaling font
         if (component instanceof JLabel ||
-                component instanceof JButton ||
+                component instanceof AbstractButton ||
                 component instanceof JTextField ||
                 component instanceof JComboBox) {
             Font font = component.getFont();
@@ -164,7 +152,7 @@ public class ConfigGUI extends JDialog {
     public JavaVersion targetSelected;
     public JavaDistro vendorSelected;
     public String javaPath, javaArgs;
-    private static HashSet<ArgsEnum> args = new HashSet<>();
+    private final HashSet<ArgsEnum> args = new HashSet<>();
     public void updateJavaArgs() {
         StringBuilder argBuilder = new StringBuilder();
         if (targetSelected.major()< 25) {
@@ -180,21 +168,21 @@ public class ConfigGUI extends JDialog {
         javaArgs = argBuilder.toString();
     }
     public void updateJavaArgsPath() {
-        int majorVersion;
-        try {
-            JavaInstall javaInstall = JavaUtils.parseInstall(javaPath);
-            majorVersion = javaInstall.version().major();
-        } catch (IOException e) {
-            CleanroomRelauncher.LOGGER.warn("could not parse path {}", javaPath, e);
-            javaPath = "";
-            return;
+        Integer majorVersion = null;
+        if (javaPath != null && !javaPath.trim().isEmpty()) {
+            try {
+                JavaInstall javaInstall = JavaUtils.parseInstall(javaPath);
+                majorVersion = javaInstall.version().major();
+            } catch (IOException | RuntimeException e) {
+                CleanroomRelauncher.LOGGER.warn("Could not inspect Java path {} while updating arguments", javaPath, e);
+            }
         }
         StringBuilder argBuilder = new StringBuilder();
-        if (majorVersion < 25) {
+        if (majorVersion != null && majorVersion < 25) {
             argBuilder.append(ArgsEnum.UnlockExperimentalOptions.getArg()).append(" ");
         }
         for(ArgsEnum arg : args) {
-            if (arg == ArgsEnum.CompactObjectHeaders && majorVersion >= 24) {
+            if (arg == ArgsEnum.CompactObjectHeaders && (majorVersion == null || majorVersion >= 24)) {
                 argBuilder.append(arg.getArg()).append(" ");
             }else if(arg == ArgsEnum.ZGC){
                 argBuilder.append(arg.getArg()).append(" ");
@@ -209,6 +197,17 @@ public class ConfigGUI extends JDialog {
         this.frame = frame;
 
         consumer.accept(this);
+        if (selected == null && !eligibleReleases.isEmpty()) {
+            selected = eligibleReleases.get(0);
+        }
+        if (autoSetup) {
+            if (targetSelected == null) {
+                targetSelected = JavaVersion.parseOrThrow(25);
+            }
+            if (vendorSelected == null) {
+                vendorSelected = JavaDistro.ZULU;
+            }
+        }
 
         this.setIconImage(frame.getIconImage());
 
@@ -234,49 +233,47 @@ public class ConfigGUI extends JDialog {
         GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
         GraphicsDevice screen = env.getDefaultScreenDevice();
         Rectangle rect = screen.getDefaultConfiguration().getBounds();
-        int width = (int) (rect.width / 3.25f);//Changed values to accommodate for new GUI
-        int height = (int) (width / 0.95f);
-        int x = (rect.width - width) / 2;
-        int y = (rect.height - height) / 2;
-        this.setLocation(x, y);
+        Dimension dialogSize = RelauncherUI.dialogSize(rect);
 
         JPanel configScreen = ConfigScreen(eligibleReleases);
 
 
         this.add(configScreen);
         this.revalidate();
-        float scale = rect.width / 1463f;
+        float scale = Math.max(0.9f, Math.min(1.25f, rect.width / 1920f));
         if (isJvm8()){
-            scale = scale/1.5f;
+            scale = Math.max(0.9f, scale / 1.15f);
         }
         scaleComponent(this, scale);
+        RelauncherUI.styleTree(this);
 
         this.pack();
-        this.setSize(width, height);
+        this.setSize(dialogSize);
+        this.setMinimumSize(new Dimension(520, 560));
+        this.setLocationRelativeTo(null);
         this.setVisible(true);
         this.setAutoRequestFocus(true);
     }
     private JPanel ConfigScreen(List<CleanroomRelease> releases) {
         JPanel container = new JPanel(new BorderLayout());
+        container.setBackground(RelauncherUI.BACKGROUND);
 
+        JPanel mainContent = RelauncherUI.scrollableColumn();
+        mainContent.setBorder(new EmptyBorder(24, 28, 28, 28));
 
-        JPanel mainContent = new JPanel();
-        mainContent.setLayout(new BoxLayout(mainContent, BoxLayout.Y_AXIS));
-
-        JLabel logo = new JLabel(new ImageIcon(frame.getIconImage().getScaledInstance(80, 80, Image.SCALE_SMOOTH)));
-        logo.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        mainContent.add(logo);
-        mainContent.add(this.initializeCleanroomPicker(releases));
-        mainContent.add(this.initializeJavaPicker());
-        mainContent.add(this.initializeArgsPanel());
-
-        JPanel wrapper = new JPanel(new GridBagLayout());
-        wrapper.add(mainContent);
-
+        mainContent.add(RelauncherUI.centeredHeader(frame.getIconImage(), "Cleanroom Settings",
+                "Changes are saved when you confirm below."));
+        mainContent.add(RelauncherUI.card("Cleanroom version", "Select the release to use on the next launch.",
+                this.initializeCleanroomPicker(releases)));
+        mainContent.add(Box.createRigidArea(new Dimension(0, 14)));
+        mainContent.add(RelauncherUI.card("Java runtime", "Automatic setup is recommended for most players.",
+                this.initializeJavaPicker()));
+        mainContent.add(Box.createRigidArea(new Dimension(0, 14)));
+        mainContent.add(RelauncherUI.card("Java arguments", "Optional performance and compatibility flags.",
+                this.initializeArgsPanel()));
         JPanel relaunchPanel = this.initializeRelaunchPanel();
 
-        container.add(wrapper, BorderLayout.CENTER);
+        container.add(RelauncherUI.scrollPane(mainContent), BorderLayout.CENTER);
         container.add(relaunchPanel, BorderLayout.SOUTH);
 
         return container;
@@ -291,7 +288,7 @@ public class ConfigGUI extends JDialog {
         cleanroomPicker.add(select);
 
         // Title label
-        JLabel title = new JLabel("Select Cleanroom Version:");
+        JLabel title = new JLabel("Version");
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
         select.add(title);
         select.add(Box.createRigidArea(new Dimension(0, 5)));
@@ -331,24 +328,8 @@ public class ConfigGUI extends JDialog {
             T selected,
             Consumer<T> onSelectionChange
     ){
-        // Target Java Version
-        // Panel
-        JPanel panel = new JPanel(new BorderLayout(5, 0));
-
-        JPanel select = new JPanel();
-        select.setLayout(new BoxLayout(select, BoxLayout.Y_AXIS));
-        panel.add(select);
-
-        // Title label
-        JLabel title = new JLabel(titleLabel);
-        title.setAlignmentX(Component.LEFT_ALIGNMENT);
-        select.add(title);
-        select.add(Box.createRigidArea(new Dimension(0, 5)));
-
-        // Create dropdown panel
-        JPanel dropdown = new JPanel(new BorderLayout(5, 5));
-        dropdown.setAlignmentX(Component.LEFT_ALIGNMENT);
-        select.add(dropdown);
+        JPanel panel = new JPanel(new BorderLayout(0, 6));
+        panel.add(RelauncherUI.fieldLabel(titleLabel), BorderLayout.NORTH);
 
         JComboBox<T> targetBox = new JComboBox<>();
         DefaultComboBoxModel<T> targetModel = new DefaultComboBoxModel<>();
@@ -362,7 +343,7 @@ public class ConfigGUI extends JDialog {
             T newItem = (T) targetBox.getSelectedItem();
             onSelectionChange.accept(newItem);
         });
-        dropdown.add(targetBox, BorderLayout.CENTER);
+        panel.add(targetBox, BorderLayout.CENTER);
         return panel;
     }
     private JPanel initializeJavaPicker() {
@@ -373,27 +354,26 @@ public class ConfigGUI extends JDialog {
 
         // Toggle buttons
         JToggleButton simplifiedBtn = new JToggleButton("Automatic Setup", autoSetup);
-        JToggleButton manualBtn = new JToggleButton("Manual Setup", !autoSetup);
+        JToggleButton manualBtn = new JToggleButton("Choose Java Manually", !autoSetup);
 
         ButtonGroup group = new ButtonGroup();
         group.add(simplifiedBtn);
         group.add(manualBtn);
 
 
-        JPanel radioPanel = new JPanel(new BorderLayout(5, 0));
-        radioPanel.setLayout(new BoxLayout(radioPanel, BoxLayout.X_AXIS));
+        JPanel radioPanel = new JPanel(new GridLayout(1, 2, 8, 0));
         radioPanel.add(simplifiedBtn);
         radioPanel.add(manualBtn);
+        radioPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 14, 0));
         javaPicker.add(radioPanel);
 
         JPanel switchableContainer = new JPanel(new BorderLayout());
         javaPicker.add(switchableContainer);
 
 
-        JPanel targetPanels = new JPanel();
-        targetPanels.setLayout(new BoxLayout(targetPanels, BoxLayout.Y_AXIS));
+        JPanel targetPanels = new JPanel(new GridLayout(1, 2, 12, 0));
         JPanel versionPanel = this.initializeJavaTargetsPicker(
-                "Select Target Java Version:",
+                "Target Java version",
                 IntStream.rangeClosed(21, 26)
                         .mapToObj(JavaVersion::parseOrThrow)
                         .collect(Collectors.toList()),
@@ -402,20 +382,19 @@ public class ConfigGUI extends JDialog {
         );
 
         JPanel vendorPanel = this.initializeJavaTargetsPicker(
-                "Select Preferred Vendor:",
+                "Preferred vendor",
                 JavaDistro.all(),
                 vendorSelected,
                 (JavaDistro val) -> vendorSelected = val
         );
-        targetPanels.add(versionPanel, BorderLayout.NORTH);
-        targetPanels.add(vendorPanel, BorderLayout.SOUTH);
+        targetPanels.add(versionPanel);
+        targetPanels.add(vendorPanel);
 
         // Select Panel
-        JPanel selectPanel = new JPanel();
-        selectPanel.setLayout(new BoxLayout(selectPanel, BoxLayout.Y_AXIS));
+        JPanel selectPanel = new JPanel(new BorderLayout());
         JPanel subSelectPanel = new JPanel(new BorderLayout());
-        JLabel title = new JLabel("Select Java Executable:");
-        JTextField text = new JTextField(100);
+        JLabel title = new JLabel("Java executable");
+        JTextField text = new JTextField(40);
         text.setText(javaPath);
         JPanel northPanel = new JPanel();
         northPanel.setLayout(new BorderLayout(5, 0));
@@ -423,7 +402,8 @@ public class ConfigGUI extends JDialog {
         subSelectPanel.add(northPanel, BorderLayout.NORTH);
         subSelectPanel.add(text, BorderLayout.CENTER);
         // JButton browse = new JButton(UIManager.getIcon("FileView.directoryIcon"));
-        JButton browse = new JButton("Browse");
+        JButton browse = new JButton("Browse…");
+        RelauncherUI.compact(browse);
         subSelectPanel.add(browse, BorderLayout.EAST);
         selectPanel.add(subSelectPanel);
 
@@ -458,10 +438,9 @@ public class ConfigGUI extends JDialog {
         northPanel.add(versionDropdown, BorderLayout.CENTER);
 
         // Options Panel
-        JPanel options = new JPanel(new BorderLayout(5, 0));
-        options.setLayout(new BoxLayout(options, BoxLayout.X_AXIS));
-        options.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        selectPanel.add(options);
+        JPanel options = new JPanel(new GridLayout(1, 2, 8, 0));
+        options.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
+        selectPanel.add(options, BorderLayout.SOUTH);
 
         // Switch
         ActionListener switchAction = e -> {
@@ -498,8 +477,8 @@ public class ConfigGUI extends JDialog {
         switchableContainer.repaint();
 
         // JButton download = new JButton("Download");
-        JButton autoDetect = new JButton("Auto-Detect");
-        JButton test = new JButton("Test");
+        JButton autoDetect = new JButton("Find Installed Java");
+        JButton test = new JButton("Test Java");
         options.add(autoDetect);
         options.add(test);
 
@@ -551,9 +530,6 @@ public class ConfigGUI extends JDialog {
                 JOptionPane.showMessageDialog(this, "The selected Java executable does not exist.", "Invalid Java Executable Path", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            JDialog testing = new JDialog(this, "Testing Java Executable", true);
-            testing.setLocationRelativeTo(this);
-
             this.testJava();
         });
 
@@ -590,8 +566,19 @@ public class ConfigGUI extends JDialog {
                 protected void done() {
                     timer.stop();
                     autoDetect.setText(original);
-                    JOptionPane.showMessageDialog(ConfigGUI.this, javaInstalls.size() + " Java 21+ Installs Found!", "Auto-Detection Finished", JOptionPane.INFORMATION_MESSAGE);
                     autoDetect.setEnabled(true);
+
+                    try {
+                        get();
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        JOptionPane.showMessageDialog(ConfigGUI.this, "Java detection was interrupted.", "Detection Interrupted", JOptionPane.WARNING_MESSAGE);
+                        return;
+                    } catch (ExecutionException failure) {
+                        CleanroomRelauncher.LOGGER.error("Failed to detect installed Java runtimes", failure.getCause());
+                        JOptionPane.showMessageDialog(ConfigGUI.this, "Installed Java runtimes could not be detected. You can still browse for one manually.", "Detection Failed", JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
 
                     if (!javaInstalls.isEmpty()) {
                         versionModel.removeAllElements();
@@ -599,6 +586,10 @@ public class ConfigGUI extends JDialog {
                             versionModel.addElement(install);
                         }
                         versionDropdown.setVisible(true);
+                        versionBox.setSelectedIndex(0);
+                        JOptionPane.showMessageDialog(ConfigGUI.this, javaInstalls.size() + " compatible Java install" + (javaInstalls.size() == 1 ? " was" : "s were") + " found.", "Java Detection Complete", JOptionPane.INFORMATION_MESSAGE);
+                    } else {
+                        JOptionPane.showMessageDialog(ConfigGUI.this, "No Java 21+ installations were found. You can browse for one manually.", "No Compatible Java Found", JOptionPane.WARNING_MESSAGE);
                     }
                 }
 
@@ -614,9 +605,9 @@ public class ConfigGUI extends JDialog {
         JPanel argsPanel = new JPanel(new BorderLayout(0, 0));
         argsPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        JLabel title = new JLabel("Add Java Arguments:");
+        JLabel title = new JLabel("Custom arguments");
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JTextField text = new JTextField(100);
+        JTextField text = new JTextField(40);
         text.setText(javaArgs);
         listenToTextFieldUpdate(text, t -> javaArgs = t.getText());
 
@@ -641,8 +632,7 @@ public class ConfigGUI extends JDialog {
             if (arg != ArgsEnum.UnlockExperimentalOptions) {
                 JPanel optionsPanel = new JPanel(new BorderLayout());
                 optionsPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-                JLabel label = new JLabel("Use "+arg.name()+" Argument "+arg.getStatus());
-                JCheckBox checkBox = new JCheckBox();
+                JCheckBox checkBox = new JCheckBox(RelauncherUI.argumentLabel(arg));
 
                 boolean isPresentInArgs = RelauncherConfiguration.read().argsContain(arg);
                 checkBox.setSelected(isPresentInArgs);
@@ -675,8 +665,7 @@ public class ConfigGUI extends JDialog {
                     CleanroomRelauncher.LOGGER.warn("args are now {}", javaArgs);
                 });
 
-                optionsPanel.add(label, BorderLayout.WEST);
-                optionsPanel.add(checkBox, BorderLayout.EAST);
+                optionsPanel.add(checkBox, BorderLayout.WEST);
                 argsPickerPanel.add(optionsPanel, BorderLayout.CENTER);
             }
         }
@@ -686,16 +675,17 @@ public class ConfigGUI extends JDialog {
     }
 
     private JPanel initializeRelaunchPanel() {
-        JPanel configButtonPanel = new JPanel();
+        JPanel configButtonPanel = RelauncherUI.footer();
 
         JButton configSaveButton = new JButton("Save Settings");
-        configButtonPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        RelauncherUI.primary(configSaveButton);
+        this.getRootPane().setDefaultButton(configSaveButton);
         configSaveButton.addActionListener(e -> {
             if (selected == null) {
-                JOptionPane.showMessageDialog(this, "Please select a Cleanroom version in order to relaunch.", "Cleanroom Release Not Selected", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Please select a Cleanroom version before saving.", "Cleanroom Release Not Selected", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            if (javaPath == null) {
+            if (!autoSetup && (javaPath == null || javaPath.trim().isEmpty())) {
                 JOptionPane.showMessageDialog(this, "Please provide a valid Java Executable in order to relaunch.", "Java Executable Not Selected", JOptionPane.ERROR_MESSAGE);
                 return;
             }
@@ -712,10 +702,12 @@ public class ConfigGUI extends JDialog {
             }else{
                 updateJavaArgsPath();
             }
-            Runnable test = this.testJavaAndReturn();
-            if (test != null) {
-                test.run();
-                return;
+            if (!autoSetup) {
+                Runnable test = this.testJavaAndReturn();
+                if (test != null) {
+                    test.run();
+                    return;
+                }
             }
 
             frame.dispose();
@@ -751,16 +743,7 @@ public class ConfigGUI extends JDialog {
     }
 
     private void addTextBoxEffect(JTextField text) {
-        text.addFocusListener(new FocusAdapter() {
-            @Override
-            public void focusGained(FocusEvent e) {
-                text.setBorder(BorderFactory.createLineBorder(new Color(142, 177, 204)));
-            }
-            @Override
-            public void focusLost(FocusEvent e) {
-                text.setBorder(null);
-            }
-        });
+        RelauncherUI.installTextFieldFocus(text);
     }
 
     private Runnable testJavaAndReturn() {
@@ -771,7 +754,7 @@ public class ConfigGUI extends JDialog {
                 return () -> JOptionPane.showMessageDialog(this, "Java 21 is the minimum version for Cleanroom. Currently, Java " + javaInstall.version().major() + " is selected.", "Old Java Version", JOptionPane.ERROR_MESSAGE);
             }
             CleanroomRelauncher.LOGGER.info("Java {} specified from {}", javaInstall.version().major(), javaPath);
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             CleanroomRelauncher.LOGGER.fatal("Failed to execute Java for testing", e);
             return () -> JOptionPane.showMessageDialog(this, "Failed to test Java (more information in console): " + e.getMessage(), "Java Test Failed", JOptionPane.ERROR_MESSAGE);
         }
@@ -788,7 +771,7 @@ public class ConfigGUI extends JDialog {
             }
             CleanroomRelauncher.LOGGER.info("Java {} specified from {}", javaInstall.version().major(), javaPath);
             JOptionPane.showMessageDialog(this, "Java executable is working correctly!", "Java Test Successful", JOptionPane.INFORMATION_MESSAGE);
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             CleanroomRelauncher.LOGGER.fatal("Failed to execute Java for testing", e);
             JOptionPane.showMessageDialog(this, "Failed to test Java (more information in console): " + e.getMessage(), "Java Test Failed", JOptionPane.ERROR_MESSAGE);
         }
