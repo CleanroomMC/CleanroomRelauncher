@@ -161,7 +161,7 @@ public class CleanroomRelauncher {
             $.javaArgs        = javaArgs;
             $.autoSetup       = autoSetup;
             $.shouldScale     = isJvm8;
-            $.updateNotification = updateNotification;
+            $.updateNotification = CONFIG.getFetchUpdatesEnabled() && updateNotification;
         });
     }
     public static void clearFolders() {
