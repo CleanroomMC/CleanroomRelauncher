@@ -48,7 +48,6 @@ public class RelauncherGUI extends JDialog {
     public String javaPath, javaArgs;
     public Boolean updateNotification;
     public boolean autoSetup;
-    public boolean shouldScale;
 
     public void updateJavaArgs() {
         StringBuilder argBuilder = new StringBuilder();
@@ -365,9 +364,7 @@ public class RelauncherGUI extends JDialog {
         });
 
         float scale = Math.max(0.9f, Math.min(1.25f, rect.width / 1920f));
-        if (shouldScale) {
-            scale = Math.max(0.9f, scale / 1.15f);
-        }
+
         RelauncherUI.scaleComponent(this, scale);
         RelauncherUI.styleTree(this);
 

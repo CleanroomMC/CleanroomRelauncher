@@ -27,8 +27,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static com.cleanroommc.relauncher.CleanroomRelauncher.isJvm8;
-
 public class ConfigGUI extends JDialog {
 
     static {
@@ -50,18 +48,19 @@ public class ConfigGUI extends JDialog {
 
     public void updateJavaArgs() {
         StringBuilder argBuilder = new StringBuilder();
-        if (targetSelected.major()< 25) {
+        if (targetSelected.major() < 25) {
             argBuilder.append(ArgsEnum.UnlockExperimentalOptions.getArg()).append(" ");
         }
-        for(ArgsEnum arg : args) {
+        for (ArgsEnum arg : args) {
             if (arg == ArgsEnum.CompactObjectHeaders && targetSelected.major() >= 24) {
                 argBuilder.append(arg.getArg()).append(" ");
-            }else if(arg == ArgsEnum.ZGC){
+            } else if (arg == ArgsEnum.ZGC) {
                 argBuilder.append(arg.getArg()).append(" ");
             }
         }
         javaArgs = argBuilder.toString();
     }
+
     public void updateJavaArgsPath() {
         Integer majorVersion = null;
         if (javaPath != null && !javaPath.trim().isEmpty()) {
@@ -76,10 +75,10 @@ public class ConfigGUI extends JDialog {
         if (majorVersion != null && majorVersion < 25) {
             argBuilder.append(ArgsEnum.UnlockExperimentalOptions.getArg()).append(" ");
         }
-        for(ArgsEnum arg : args) {
+        for (ArgsEnum arg : args) {
             if (arg == ArgsEnum.CompactObjectHeaders && (majorVersion == null || majorVersion >= 24)) {
                 argBuilder.append(arg.getArg()).append(" ");
-            }else if(arg == ArgsEnum.ZGC){
+            } else if (arg == ArgsEnum.ZGC) {
                 argBuilder.append(arg.getArg()).append(" ");
             }
         }
@@ -87,6 +86,7 @@ public class ConfigGUI extends JDialog {
     }
 
     private final JFrame frame;
+
     private ConfigGUI(SupportingFrame frame, List<CleanroomRelease> eligibleReleases, Consumer<ConfigGUI> consumer) {
         super(frame, frame.getTitle(), true);
         this.frame = frame;
@@ -133,9 +133,7 @@ public class ConfigGUI extends JDialog {
         RelauncherUI.onEscape(this.getRootPane(), this::discardAndClose);
 
         float scale = Math.max(0.9f, Math.min(1.25f, rect.width / 1920f));
-        if (isJvm8()) {
-            scale = Math.max(0.9f, scale / 1.15f);
-        }
+
         RelauncherUI.scaleComponent(this, scale);
         RelauncherUI.styleTree(this);
 

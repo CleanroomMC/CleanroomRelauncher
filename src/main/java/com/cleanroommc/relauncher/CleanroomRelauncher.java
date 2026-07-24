@@ -151,7 +151,6 @@ public class CleanroomRelauncher {
             JavaVersion javaTarget,
             JavaDistro javaVendor,
             boolean autoSetup,
-            boolean isJvm8,
             boolean updateNotification) {
 
         return RelauncherGUI.show(releases, $ -> {
@@ -161,7 +160,6 @@ public class CleanroomRelauncher {
             $.vendorSelected     = javaVendor;
             $.javaArgs           = javaArgs;
             $.autoSetup          = autoSetup;
-            $.shouldScale        = isJvm8;
             $.updateNotification = CONFIG.getFetchUpdatesEnabled() && updateNotification;
         });
     }
@@ -241,7 +239,7 @@ public class CleanroomRelauncher {
         if (relauncherEnabled) {
             if (!autoSetup && (selected == null || javaPath == null || needsNotifyLatest)) {
                 while (javaPath == null || Objects.equals(javaPath, "")) {
-                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, !isJvm8(), false);
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, false);
                     if (gui.selected != null) {
                         selected = gui.selected;
                     } else{
@@ -269,7 +267,7 @@ public class CleanroomRelauncher {
             }
             if (autoSetup) {
                 if (needsNotifyLatest) {
-                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, isJvm8(), true);
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, true);
                     selected = (gui.selected != null)? gui.selected : latestRelease;
                     javaPath = gui.javaPath;
                     javaArgs = gui.javaArgs;
@@ -286,7 +284,7 @@ public class CleanroomRelauncher {
                 }
                 javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
                 while (Objects.equals(javaPath, "")) {
-                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, isJvm8(), false);
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, false);
 
                     selected = (gui.selected != null)? gui.selected : latestRelease;
                     javaPath = gui.javaPath;
@@ -411,24 +409,6 @@ public class CleanroomRelauncher {
         } catch (Exception ignored) {}
         // J8 messes up scaling it seems
         return currentJavaMajorVersion == 8;
-    }
-
-    public static boolean isJvm8Oracle() {
-        // Detect current JVM
-        int currentJavaMajorVersion = 8;
-        String vendor="";
-        try {
-            vendor = System.getProperty("java.vendor");
-            String version = System.getProperty("java.version");
-            if (version.startsWith("1.")) {
-                currentJavaMajorVersion = Integer.parseInt(version.split("\\.")[1]);
-            } else {
-                currentJavaMajorVersion = Integer.parseInt(version.split("\\.")[0]);
-            }
-        } catch (Exception ignored) {}
-        // J8 messes up scaling it seems
-        boolean isOracle = vendor != null && vendor.toLowerCase(Locale.ENGLISH).contains("oracle");
-        return currentJavaMajorVersion == 8 && isOracle;
     }
 
 }
