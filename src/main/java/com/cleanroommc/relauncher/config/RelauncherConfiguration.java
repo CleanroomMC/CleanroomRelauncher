@@ -3,7 +3,6 @@ package com.cleanroommc.relauncher.config;
 import com.cleanroommc.javautils.api.JavaDistro;
 import com.cleanroommc.javautils.api.JavaVersion;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
-import com.cleanroommc.relauncher.util.enums.ArgsEnum;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
@@ -15,21 +14,23 @@ import java.nio.file.Path;
 
 public class RelauncherConfiguration {
 
-    public static final Gson GSON = new GsonBuilder()
-            .setPrettyPrinting()
-            .create();
+    public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     public static final Path FILE = Launch.minecraftHome.toPath().resolve("config/relauncher.json");
 
     public static RelauncherConfiguration read() {
-        if (Files.notExists(FILE)) {
-            return new RelauncherConfiguration();
+        if (!Files.notExists(FILE)) {
+            try (Reader reader = Files.newBufferedReader(FILE)) {
+                RelauncherConfiguration configuration = GSON.fromJson(reader, RelauncherConfiguration.class);
+                if (configuration == null) {
+                    CleanroomRelauncher.LOGGER.warn("Config at {} was empty, falling back to defaults.", FILE);
+                } else {
+                    return configuration;
+                }
+            } catch (IOException | RuntimeException e) {
+                CleanroomRelauncher.LOGGER.error("Unable to read config, falling back to defaults.", e);
+            }
         }
-        try (Reader reader = Files.newBufferedReader(FILE)) {
-            return GSON.fromJson(reader, RelauncherConfiguration.class);
-        } catch (IOException e) {
-            CleanroomRelauncher.LOGGER.error("Unable to read config", e);
-            return new RelauncherConfiguration();
-        }
+        return new RelauncherConfiguration();
     }
 
     @SerializedName("selectedVersion")
@@ -47,15 +48,15 @@ public class RelauncherConfiguration {
     @SerializedName("autoSetup")
     private boolean autoSetup;
     @SerializedName("enableRelauncher")
-    private boolean enableRelauncher=true;
-    @SerializedName("FetchUpdates")
-    private boolean FetchUpdates=true;
+    private boolean enableRelauncher = true;
+    @SerializedName(value = "fetchUpdates", alternate = { "FetchUpdates" })
+    private boolean FetchUpdates = true;
     @SerializedName("clearCleanroomFolder")
-    private boolean clearCleanroomFolder=false;
+    private boolean clearCleanroomFolder = false;
     @SerializedName("clearJavaProvisionFolder")
-    private boolean clearJavaProvisionFolder=false;
+    private boolean clearJavaProvisionFolder = false;
     @SerializedName("darkMode")
-    private Boolean darkMode = Boolean.TRUE;
+    private boolean darkMode = false;
 
     public String getCleanroomVersion() {
         return cleanroomVersion;
@@ -79,7 +80,7 @@ public class RelauncherConfiguration {
     }
 
     public String getJavaArguments() {
-        return javaArguments;
+        return javaArguments == null ? "" : javaArguments;
     }
 
     public boolean getAutoSetup() {
@@ -106,7 +107,7 @@ public class RelauncherConfiguration {
     }
 
     public boolean getDarkMode() {
-        return darkMode == null || darkMode;
+        return darkMode;
     }
 
     public void setCleanroomVersion(String cleanroomVersion) {
@@ -118,7 +119,7 @@ public class RelauncherConfiguration {
     }
 
     public void setJavaExecutablePath(String javaExecutablePath) {
-        this.javaExecutablePath = javaExecutablePath.replace("\\\\", "/");
+        this.javaExecutablePath = javaExecutablePath == null ? null : javaExecutablePath.replace("\\\\", "/");
     }
 
     public void setJavaArguments(String javaArguments) {
@@ -145,7 +146,7 @@ public class RelauncherConfiguration {
     }
 
     public void setTargetJavaVersion(JavaVersion targetJavaVersion) {
-        this.targetJavaVersion = targetJavaVersion.major();
+        this.targetJavaVersion = targetJavaVersion == null ? 0 : targetJavaVersion.major();
     }
 
     public void setTargetVendor(JavaDistro targetVendor) {
@@ -172,10 +173,6 @@ public class RelauncherConfiguration {
         } catch (IOException e) {
             CleanroomRelauncher.LOGGER.error("Unable to save config", e);
         }
-    }
-
-    public boolean argsContain(ArgsEnum arg){
-        return javaArguments.contains(arg.getArg());
     }
 
 }
