@@ -5,39 +5,37 @@ import com.cleanroommc.relauncher.util.enums.ArgsEnum;
 
 import javax.swing.*;
 import javax.swing.border.Border;
-import javax.swing.plaf.basic.BasicButtonUI;
-import javax.swing.plaf.basic.BasicComboBoxUI;
-import javax.swing.plaf.basic.BasicComboPopup;
-import javax.swing.plaf.basic.BasicScrollBarUI;
-import javax.swing.plaf.basic.ComboPopup;
+import javax.swing.border.EmptyBorder;
+import javax.swing.event.ChangeListener;
+import javax.swing.plaf.basic.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.font.TextAttribute;
 import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
 import java.io.File;
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /** Shared visual language for the standalone relauncher windows. */
 final class RelauncherUI {
 
     private static boolean darkTheme;
 
-    static Color BACKGROUND;
-    static Color SURFACE;
-    static Color CONTROL;
-    static Color CONTROL_HOVER;
-    static Color TEXT;
-    static Color MUTED_TEXT;
     static final Color PRIMARY = new Color(32, 184, 176);
-    static Color PRIMARY_HOVER;
-    static Color BORDER;
-    static Color FOCUS;
-    static Color SUCCESS;
-    static Color ERROR;
-    static Color DISABLED_TEXT;
+
+    static Color BACKGROUND, SURFACE, CONTROL, CONTROL_HOVER, TEXT, MUTED_TEXT, PRIMARY_HOVER, BORDER, FOCUS,
+            SUCCESS, ERROR, DISABLED_TEXT;
 
     static {
         setPalette(loadConfiguredDarkMode());
@@ -45,6 +43,8 @@ final class RelauncherUI {
 
     private static final String PRIMARY_BUTTON = "relauncher.primaryButton";
     private static final String COMPACT_BUTTON = "relauncher.compactButton";
+    private static final String GHOST_BUTTON = "relauncher.ghostButton";
+    private static final String SEGMENTED = "relauncher.segmented";
     private static final String COMBO_ARROW = "relauncher.comboArrow";
     private static final String DARK_RENDERER = "relauncher.darkRenderer";
     private static final String KEEP_OPAQUE = "relauncher.keepOpaque";
@@ -53,9 +53,58 @@ final class RelauncherUI {
     private static final String THEME_SWITCH = "relauncher.themeSwitch";
     private static final String BACKGROUND_ROLE = "background";
     private static final String SURFACE_ROLE = "surface";
-    private static final Font BASE_FONT = new Font("SansSerif", Font.PLAIN, 13);
+    private static final String BADGE_ROLE = "badge";
+    private static final String UI_FAMILY = resolveUiFamily();
+    private static final Font BASE_FONT = uiFont(13f, TextAttribute.WEIGHT_REGULAR);
 
     private RelauncherUI() { }
+
+    private static String resolveUiFamily() {
+        String[] candidates = {
+                "Segoe UI", "Inter", "SF Pro Text", "Helvetica Neue",
+                "Ubuntu", "Cantarell", "Noto Sans", Font.SANS_SERIF
+        };
+        for (int i = 0; i < candidates.length; i++) {
+            Font probe = new Font(candidates[i], Font.PLAIN, 12);
+            if (isFontFamily(probe, candidates[i]) || i == candidates.length - 1) {
+                return probe.getFamily();
+            }
+        }
+        return Font.SANS_SERIF;
+    }
+
+    private static boolean isFontFamily(Font font, String expected) {
+        String family = font.getFamily();
+        return family != null && family.equalsIgnoreCase(expected);
+    }
+
+    /**
+     * UI type with explicit weight. Prefer {@link TextAttribute#WEIGHT_SEMIBOLD} over full {@link Font#BOLD}.
+     * Segoe Bold paints heavy and muddy at dialog sizes.
+     */
+    private static Font uiFont(float size, Float weight) {
+        // Whole-pixel sizes avoid soft/fractional glyph rasterization under Windows DPI
+        float pixelSize = Math.max(11f, Math.round(size));
+        Map<TextAttribute, Object> attributes = new HashMap<>();
+        attributes.put(TextAttribute.FAMILY, UI_FAMILY);
+        attributes.put(TextAttribute.SIZE, pixelSize);
+        attributes.put(TextAttribute.WEIGHT, weight);
+        attributes.put(TextAttribute.KERNING, TextAttribute.KERNING_ON);
+        return new Font(attributes);
+    }
+
+    private static Font uiRegular(float size) {
+        return uiFont(size, TextAttribute.WEIGHT_REGULAR);
+    }
+
+    private static Font uiMedium(float size) {
+        // Slightly stronger than regular for hierarchy without full bold fatness
+        return uiFont(size, TextAttribute.WEIGHT_MEDIUM);
+    }
+
+    private static Font uiSemibold(float size) {
+        return uiFont(size, TextAttribute.WEIGHT_SEMIBOLD);
+    }
 
     private static boolean loadConfiguredDarkMode() {
         try {
@@ -93,6 +142,7 @@ final class RelauncherUI {
         setPalette(useDarkTheme);
         Color[] currentPalette = paletteSnapshot();
         installThemeDefaults();
+
         CleanroomRelauncher.CONFIG.setDarkMode(useDarkTheme);
         CleanroomRelauncher.CONFIG.save();
 
@@ -109,7 +159,10 @@ final class RelauncherUI {
     }
 
     private static Color[] paletteSnapshot() {
-        return new Color[]{
+        Field[] colors = RelauncherUI.class.getDeclaredFields();
+
+
+        return new Color[] {
                 BACKGROUND, SURFACE, CONTROL, CONTROL_HOVER, TEXT, MUTED_TEXT,
                 PRIMARY_HOVER, BORDER, FOCUS, SUCCESS, ERROR, DISABLED_TEXT
         };
@@ -183,8 +236,7 @@ final class RelauncherUI {
         chooser.setAlwaysOnTop(false);
         chooser.setMultipleMode(false);
         chooser.setFilenameFilter((directory, name) ->
-                !System.getProperty("os.name", "").toLowerCase().contains("win")
-                        || name.toLowerCase().endsWith(".exe"));
+                !System.getProperty("os.name", "").toLowerCase().contains("win") || name.toLowerCase().endsWith(".exe"));
 
         if (currentPath != null && !currentPath.trim().isEmpty()) {
             File currentFile = new File(currentPath.trim());
@@ -209,7 +261,8 @@ final class RelauncherUI {
     }
 
     static void install() {
-        System.setProperty("awt.useSystemAAFontSettings", "on");
+        // LCD/ClearType on Windows — much sharper than greyscale AA for UI copy
+        System.setProperty("awt.useSystemAAFontSettings", "lcd");
         System.setProperty("swing.aatext", "true");
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -262,16 +315,162 @@ final class RelauncherUI {
         UIManager.put("ToolTip.background", CONTROL_HOVER);
         UIManager.put("ToolTip.foreground", TEXT);
         UIManager.put("ToolTip.border", BorderFactory.createLineBorder(BORDER));
-        UIManager.put("ToolTip.font", BASE_FONT.deriveFont(12f));
+        UIManager.put("ToolTip.font", uiRegular(12f));
     }
 
     static void primary(AbstractButton button) {
         button.putClientProperty(PRIMARY_BUTTON, Boolean.TRUE);
-        button.setFont(button.getFont().deriveFont(Font.BOLD));
+        button.putClientProperty(GHOST_BUTTON, null);
+        button.setFont(uiMedium(button.getFont().getSize2D()));
     }
 
     static void compact(AbstractButton button) {
         button.putClientProperty(COMPACT_BUTTON, Boolean.TRUE);
+    }
+
+    /** Secondary outline-style action that stays quieter than the primary CTA. */
+    static void ghost(AbstractButton button) {
+        button.putClientProperty(GHOST_BUTTON, Boolean.TRUE);
+        button.putClientProperty(PRIMARY_BUTTON, null);
+    }
+
+    static void sizeActionButton(AbstractButton button, int width, int height) {
+        Dimension size = new Dimension(width, height);
+        button.setPreferredSize(size);
+        button.setMinimumSize(size);
+        button.setMaximumSize(size);
+    }
+
+    static void showError(Component parent, String title, String message) {
+        showMessage(parent, title, message, true);
+    }
+
+    static void showInfo(Component parent, String title, String message) {
+        showMessage(parent, title, message, false);
+    }
+
+    private static void showMessage(Component parent, String title, String message, boolean error) {
+        UIManager.put("OptionPane.background", SURFACE);
+        UIManager.put("Panel.background", SURFACE);
+        UIManager.put("OptionPane.messageForeground", TEXT);
+        JOptionPane.showMessageDialog(parent, message, title, error ? JOptionPane.ERROR_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /**
+     * Binds Escape on the root pane. Prefer this over raw KeyListeners so
+     * focused text fields still pass Escape through when empty focus is fine.
+     */
+    static void onEscape(JRootPane rootPane, Runnable action) {
+        String key = "relauncher.escape";
+        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), key);
+        rootPane.getActionMap().put(key, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                action.run();
+            }
+        });
+    }
+
+    static void scaleComponent(Component component, float scale) {
+        if (component instanceof JTextField || component instanceof AbstractButton || component instanceof JComboBox) {
+            Dimension size = component.getPreferredSize();
+            component.setPreferredSize(new Dimension((int) (size.width * scale) + 10, (int) (size.height * scale)));
+            component.setMaximumSize(new Dimension((int) (size.width * scale) + 10, (int) (size.height * scale)));
+        } else if (component instanceof JLabel) {
+            JLabel label = (JLabel) component;
+            Icon icon = label.getIcon();
+            if (icon instanceof ImageIcon) {
+                ImageIcon imageIcon = (ImageIcon) icon;
+                Image image = imageIcon.getImage();
+                if (image != null) {
+                    Image scaledImage = image.getScaledInstance(
+                            (int) (imageIcon.getIconWidth() * scale),
+                            (int) (imageIcon.getIconHeight() * scale),
+                            Image.SCALE_SMOOTH);
+                    label.setIcon(new ImageIcon(scaledImage));
+                }
+            }
+        }
+
+        if (component instanceof JLabel || component instanceof AbstractButton || component instanceof JTextField ||
+                component instanceof JComboBox) {
+            Font font = component.getFont();
+            if (font != null) {
+                // Round to whole pixels so scaled text stays crisp.
+                float scaled = Math.max(11f, Math.round(font.getSize2D() * scale));
+                component.setFont(font.deriveFont(scaled));
+            }
+        }
+
+        if (component instanceof AbstractButton) {
+            AbstractButton button = (AbstractButton) component;
+            Insets margin = button.getMargin();
+            if (margin != null) {
+                button.setMargin(new Insets(
+                        (int) (margin.top * scale),
+                        (int) (margin.left * scale),
+                        (int) (margin.bottom * scale),
+                        (int) (margin.right * scale)
+                ));
+            }
+        } else if (component instanceof JTextField) {
+            JTextField textField = (JTextField) component;
+            Insets margin = textField.getMargin();
+            if (margin != null) {
+                textField.setMargin(new Insets(
+                        (int) (margin.top * scale),
+                        (int) (margin.left * scale),
+                        (int) (margin.bottom * scale),
+                        (int) (margin.right * scale)
+                ));
+            }
+        } else if (component instanceof JComboBox) {
+            JComboBox<?> comboBox = (JComboBox<?>) component;
+            Insets margin = comboBox.getInsets();
+            if (margin != null) {
+                comboBox.setBorder(BorderFactory.createEmptyBorder(
+                        (int) (margin.top * scale),
+                        (int) (margin.left * scale),
+                        (int) (margin.bottom * scale),
+                        (int) (margin.right * scale)
+                ));
+            }
+        } else if (component instanceof JLabel) {
+            JLabel label = (JLabel) component;
+            Insets margin = label.getInsets();
+            if (margin != null) {
+                label.setBorder(BorderFactory.createEmptyBorder(
+                        (int) (margin.top * scale),
+                        (int) (margin.left * scale),
+                        (int) (margin.bottom * scale),
+                        (int) (margin.right * scale)
+                ));
+            }
+        } else if (component instanceof JPanel) {
+            JPanel panel = (JPanel) component;
+            Border existingBorder = panel.getBorder();
+
+            Insets margin = existingBorder instanceof EmptyBorder ?
+                    ((EmptyBorder) existingBorder).getBorderInsets()
+                    : new Insets(0, 0, 0, 0);
+
+            panel.setBorder(BorderFactory.createEmptyBorder(
+                    (int) (margin.top * scale),
+                    (int) (margin.left * scale),
+                    (int) (margin.bottom * scale),
+                    (int) (margin.right * scale)
+            ));
+        }
+
+        component.revalidate();
+        component.repaint();
+
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                scaleComponent(child, scale);
+            }
+        }
     }
 
     static void backgroundPanel(JPanel panel) {
@@ -295,28 +494,37 @@ final class RelauncherUI {
 
     static JLabel title(String text) {
         JLabel label = new JLabel(text);
-        label.setFont(BASE_FONT.deriveFont(Font.BOLD, 24f));
+        // Semibold + size for hierarchy
+        label.setFont(uiSemibold(22f));
         label.setForeground(TEXT);
         return label;
     }
 
     static JLabel subtitle(String text) {
         JLabel label = new JLabel(text);
-        label.setFont(BASE_FONT.deriveFont(13f));
+        label.setFont(uiRegular(13f));
         label.setForeground(MUTED_TEXT);
         return label;
     }
 
     static JLabel fieldLabel(String text) {
         JLabel label = new JLabel(text);
-        label.setFont(BASE_FONT.deriveFont(Font.BOLD, 12f));
+        // Regular + muted color since bold labels looked too thick
+        label.setFont(uiRegular(12f));
         label.setForeground(MUTED_TEXT);
+        return label;
+    }
+
+    /** Field label with spacing so it never sits flush against the control below. */
+    static JLabel fieldLabelAbove(String text) {
+        JLabel label = fieldLabel(text);
+        label.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
         return label;
     }
 
     static JLabel statusLabel(String text) {
         JLabel label = subtitle(text);
-        label.setFont(BASE_FONT.deriveFont(12f));
+        label.setFont(uiRegular(12f));
         label.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
         return label;
     }
@@ -327,23 +535,19 @@ final class RelauncherUI {
     }
 
     static String argumentLabel(ArgsEnum argument) {
-        if (argument == ArgsEnum.CompactObjectHeaders) {
-            return "Compact object headers";
-        }
-        if (argument == ArgsEnum.ZGC) {
-            return "Z Garbage Collector";
-        }
-        return argument.name();
+        return argument.getTitle();
     }
 
     static String argumentDescription(ArgsEnum argument) {
-        if (argument == ArgsEnum.CompactObjectHeaders) {
-            return "Recommended on Java 24+ to reduce object memory overhead.";
+        return argument.getDescription();
+    }
+
+    static String argumentTooltip(ArgsEnum argument) {
+        String description = argumentDescription(argument);
+        if (description.isEmpty()) {
+            return argument.getArg();
         }
-        if (argument == ArgsEnum.ZGC) {
-            return "Experimental low-latency collector intended for stronger CPUs.";
-        }
-        return "";
+        return argument.getArg() + ": " + description;
     }
 
     static JPanel optionRow(JCheckBox checkBox, String description) {
@@ -355,12 +559,194 @@ final class RelauncherUI {
         row.add(checkBox);
         if (description != null && !description.isEmpty()) {
             JLabel detail = subtitle(description);
-            detail.setFont(BASE_FONT.deriveFont(12f));
+            detail.setFont(uiRegular(12f));
             detail.setAlignmentX(Component.LEFT_ALIGNMENT);
             detail.setBorder(BorderFactory.createEmptyBorder(2, 24, 0, 0));
             row.add(detail);
         }
         return row;
+    }
+
+    /** Soft pill badge used for recommended labels and status chips. */
+    static JLabel badge(String text, boolean emphasize) {
+        JLabel badge = new JLabel(text);
+        badge.setOpaque(false);
+        badge.setFont(uiMedium(11f));
+        badge.setForeground(emphasize ? Color.WHITE : MUTED_TEXT);
+        badge.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
+        badge.putClientProperty(BADGE_ROLE, emphasize ? "primary" : "muted");
+        badge.setUI(new BadgeLabelUI());
+        return badge;
+    }
+
+    /**
+     * Show/hide badge paint without removing it from layout, so parent rows don't jump.
+     */
+    static void setBadgeShown(JLabel badge, boolean shown) {
+        badge.putClientProperty(BADGE_ROLE, shown ? "primary" : "hidden");
+        badge.setForeground(shown ? Color.WHITE : new Color(0, 0, 0, 0));
+        badge.repaint();
+    }
+
+    static JPanel summaryCard(String... rows) {
+        JPanel card = new SurfacePanel(new BorderLayout());
+        card.setBorder(BorderFactory.createEmptyBorder(14, 16, 14, 16));
+        card.setAlignmentX(Component.CENTER_ALIGNMENT);
+        card.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
+
+        JPanel content = new JPanel();
+        content.setOpaque(false);
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        for (int i = 0; i < rows.length; i += 2) {
+            String key = rows[i];
+            String value = i + 1 < rows.length ? rows[i + 1] : "";
+            content.add(summaryRow(key, value));
+            if (i + 2 < rows.length) {
+                content.add(Box.createRigidArea(new Dimension(0, 8)));
+            }
+        }
+        card.add(content, BorderLayout.CENTER);
+        return card;
+    }
+
+    static JPanel summaryRow(String key, String value) {
+        JPanel row = new JPanel(new BorderLayout(12, 0));
+        row.setOpaque(false);
+        JLabel keyLabel = fieldLabel(key);
+        JLabel valueLabel = new JLabel(value);
+        valueLabel.setForeground(TEXT);
+        valueLabel.setFont(uiMedium(13f));
+        valueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        row.add(keyLabel, BorderLayout.WEST);
+        row.add(valueLabel, BorderLayout.EAST);
+        return row;
+    }
+
+    static JPanel versionTransition(String from, String to) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel current = badge(from == null || from.isEmpty() ? "None" : from, false);
+        JLabel arrow = new JLabel("→");
+        arrow.setForeground(MUTED_TEXT);
+        arrow.setFont(uiMedium(14f));
+        JLabel next = badge(to, true);
+
+        row.add(current);
+        row.add(arrow);
+        row.add(next);
+        return row;
+    }
+
+    /** Handle for a two-option segmented control, {@link #panel} is the component to add. */
+    static final class SegmentedControl {
+
+        final JPanel panel;
+        private final JToggleButton left;
+        private final JToggleButton right;
+        private final Consumer<Boolean> onSelection;
+
+        private SegmentedControl(JPanel panel, JToggleButton left, JToggleButton right, Consumer<Boolean> onSelection) {
+            this.panel = panel;
+            this.left = left;
+            this.right = right;
+            this.onSelection = onSelection;
+        }
+
+        /** Select the left option (e.g. Automatic) and run the selection callback. */
+        void selectLeft() {
+            left.setSelected(true);
+            onSelection.accept(Boolean.TRUE);
+            panel.repaint();
+        }
+
+        /** Select the right option (e.g. Manual) and run the selection callback. */
+        void selectRight() {
+            right.setSelected(true);
+            onSelection.accept(Boolean.FALSE);
+            panel.repaint();
+        }
+
+    }
+
+    /**
+     * Two-option segmented control. {@code leftSelected} true selects the first option.
+     * Callback receives true when the left option becomes selected.
+     * <p>
+     * The shell paints a single track + one selection thumb. Segment buttons are text-only
+     * so you never get a pill drawn inside another pill.
+     */
+    static SegmentedControl segmentedControl(String leftLabel, String rightLabel, boolean leftSelected,
+                                             Consumer<Boolean> onSelection) {
+        final SegmentedShell shell = new SegmentedShell();
+        shell.setLayout(new GridLayout(1, 2, 0, 0));
+        shell.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        Dimension shellSize = new Dimension(Integer.MAX_VALUE, 48);
+        shell.setPreferredSize(new Dimension(280, 48));
+        shell.setMinimumSize(new Dimension(160, 48));
+        shell.setMaximumSize(shellSize);
+
+        final JToggleButton left = new JToggleButton(leftLabel);
+        final JToggleButton right = new JToggleButton(rightLabel);
+        prepareSegmentButton(left, "left");
+        prepareSegmentButton(right, "right");
+        left.setSelected(leftSelected);
+        right.setSelected(!leftSelected);
+        ButtonGroup group = new ButtonGroup();
+        group.add(left);
+        group.add(right);
+
+        left.addActionListener(e -> {
+            if (left.isSelected()) {
+                onSelection.accept(Boolean.TRUE);
+            }
+            shell.repaint();
+        });
+        right.addActionListener(e -> {
+            if (right.isSelected()) {
+                onSelection.accept(Boolean.FALSE);
+            }
+            shell.repaint();
+        });
+
+        // Keep thumb in sync with press/rollover/selection model changes
+        ChangeListener repaintShell = e -> shell.repaint();
+        left.addChangeListener(repaintShell);
+        right.addChangeListener(repaintShell);
+
+        shell.bind(left, right);
+        shell.add(left);
+        shell.add(right);
+        return new SegmentedControl(shell, left, right, onSelection);
+    }
+
+    private static void prepareSegmentButton(JToggleButton button, String side) {
+        button.putClientProperty(SEGMENTED, side);
+        button.setOpaque(false);
+        button.setContentAreaFilled(false);
+        button.setBorderPainted(false);
+        button.setFocusPainted(false);
+        button.setRolloverEnabled(true);
+        button.setBorder(BorderFactory.createEmptyBorder());
+        button.setMargin(new Insets(8, 14, 8, 14));
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        Dimension segmentSize = new Dimension(120, 40);
+        button.setPreferredSize(segmentSize);
+        button.setMinimumSize(segmentSize);
+    }
+
+    static JProgressBar progressBar() {
+        JProgressBar bar = new JProgressBar();
+        bar.setOpaque(false);
+        bar.setBorderPainted(false);
+        bar.setStringPainted(false);
+        bar.setForeground(PRIMARY);
+        bar.setBackground(CONTROL);
+        bar.setPreferredSize(new Dimension(480, 12));
+        bar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 12));
+        bar.setUI(new ModernProgressBarUI());
+        return bar;
     }
 
     static JPanel header(Image image, String title, String subtitle) {
@@ -425,7 +811,7 @@ final class RelauncherUI {
         copy.setLayout(new BoxLayout(copy, BoxLayout.Y_AXIS));
         JLabel heading = new JLabel(title);
         heading.setForeground(TEXT);
-        heading.setFont(BASE_FONT.deriveFont(Font.BOLD, 15f));
+        heading.setFont(uiSemibold(15f));
         heading.setAlignmentX(Component.LEFT_ALIGNMENT);
         copy.add(heading);
         if (description != null && !description.isEmpty()) {
@@ -464,7 +850,15 @@ final class RelauncherUI {
     }
 
     static void styleTree(Component component) {
-        component.setFont(component.getFont() == null ? BASE_FONT : component.getFont());
+        if (component.getFont() == null) {
+            component.setFont(BASE_FONT);
+        }
+        // Ask Swing to use LCD glyph rasterization on every component paint path
+        if (component instanceof JComponent) {
+            JComponent swing = (JComponent) component;
+            swing.putClientProperty(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
+            swing.putClientProperty(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+        }
 
         if (component instanceof JCheckBox) {
             JCheckBox checkBox = (JCheckBox) component;
@@ -492,15 +886,25 @@ final class RelauncherUI {
                 button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 return;
             }
+            boolean segmented = button.getClientProperty(SEGMENTED) != null;
             button.setUI(new ModernButtonUI());
             button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             button.setFocusPainted(false);
             button.setRolloverEnabled(true);
-            boolean compact = Boolean.TRUE.equals(button.getClientProperty(COMPACT_BUTTON));
-            button.setMargin(compact ? new Insets(5, 12, 5, 12) : new Insets(8, 16, 8, 16));
-            if (compact) {
-                Dimension preferred = button.getPreferredSize();
-                button.setPreferredSize(new Dimension(preferred.width, 34));
+            // Strip L&F chrome so we never get a second border/pill under
+            button.setBorder(BorderFactory.createEmptyBorder());
+            button.setBorderPainted(false);
+            button.setContentAreaFilled(false);
+            button.setOpaque(false);
+            if (segmented) {
+                button.setMargin(new Insets(8, 14, 8, 14));
+            } else {
+                boolean compact = Boolean.TRUE.equals(button.getClientProperty(COMPACT_BUTTON));
+                button.setMargin(compact ? new Insets(5, 12, 5, 12) : new Insets(8, 16, 8, 16));
+                if (compact) {
+                    Dimension preferred = button.getPreferredSize();
+                    button.setPreferredSize(new Dimension(preferred.width, 34));
+                }
             }
         } else if (component instanceof JTextField) {
             JTextField text = (JTextField) component;
@@ -530,11 +934,28 @@ final class RelauncherUI {
             if (scrollBar.getOrientation() == Adjustable.VERTICAL) {
                 scrollBar.setPreferredSize(new Dimension(10, scrollBar.getPreferredSize().height));
             }
+        } else if (component instanceof JProgressBar) {
+            JProgressBar progressBar = (JProgressBar) component;
+            progressBar.setUI(new ModernProgressBarUI());
+            progressBar.setForeground(PRIMARY);
+            progressBar.setBackground(CONTROL);
+            progressBar.setBorderPainted(false);
+            progressBar.setOpaque(false);
         } else if (component instanceof JLabel) {
-            if (((JLabel) component).getForeground() == null || Color.BLACK.equals(((JLabel) component).getForeground())) {
+            JLabel label = (JLabel) component;
+            Object badgeRole = label.getClientProperty(BADGE_ROLE);
+            if (badgeRole != null) {
+                if ("hidden".equals(badgeRole)) {
+                    label.setForeground(new Color(0, 0, 0, 0));
+                } else {
+                    boolean emphasize = "primary".equals(badgeRole);
+                    label.setForeground(emphasize ? Color.WHITE : MUTED_TEXT);
+                }
+                label.setUI(new BadgeLabelUI());
+            } else if (label.getForeground() == null || Color.BLACK.equals(label.getForeground())) {
                 component.setForeground(TEXT);
             }
-        } else if (component instanceof JPanel && !(component instanceof SurfacePanel)) {
+        } else if (component instanceof JPanel && !(component instanceof SurfacePanel) && !(component instanceof SegmentedShell)) {
             JPanel panel = (JPanel) component;
             if (!Boolean.TRUE.equals(panel.getClientProperty(KEEP_OPAQUE))) {
                 panel.setOpaque(false);
@@ -563,9 +984,106 @@ final class RelauncherUI {
     }
 
     static Dimension dialogSize(Rectangle screenBounds) {
-        int width = Math.min(720, Math.max(520, screenBounds.width - 80));
-        int height = Math.min(800, Math.max(560, screenBounds.height - 100));
+        int width = Math.min(720, Math.max(560, screenBounds.width - 80));
+        int height = Math.min(820, Math.max(640, screenBounds.height - 100));
         return new Dimension(width, height);
+    }
+
+    /**
+     * Sizes a dialog and enforces a minimum size.
+     * Windows native peers sometimes ignore {@link Window#setMinimumSize(Dimension)}.
+     * The resize guard clamps after-the-fact.
+     *
+     * @param contentFloor preferred size of the screen that must remain usable (e.g. starting UI)
+     */
+    static void sizeAndGuard(Window window, Dimension targetSize, Dimension contentFloor) {
+        final Dimension contentFloorCopy = new Dimension(contentFloor);
+        Dimension minimum = computeMinimumSize(window, contentFloorCopy);
+        window.setMinimumSize(minimum);
+
+        GraphicsConfiguration gc = window.getGraphicsConfiguration();
+        if (gc == null) {
+            gc = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration();
+        }
+        Rectangle screen = gc.getBounds();
+        Insets screenInsets = Toolkit.getDefaultToolkit().getScreenInsets(gc);
+        int maxW = Math.max(minimum.width, screen.width - screenInsets.left - screenInsets.right - 40);
+        int maxH = Math.max(minimum.height, screen.height - screenInsets.top - screenInsets.bottom - 40);
+
+        int width = Math.min(maxW, Math.max(minimum.width, targetSize.width));
+        int height = Math.min(maxH, Math.max(minimum.height, targetSize.height));
+        window.setSize(width, height);
+        installMinimumSizeGuard(window, contentFloorCopy);
+    }
+
+    private static Dimension computeMinimumSize(Window window, Dimension contentFloor) {
+        Insets insets = window.getInsets();
+        // Peer insets are often 0 before first show
+        int chromeW = Math.max(insets.left + insets.right, 16);
+        int chromeH = Math.max(insets.top + insets.bottom, 48);
+
+        int minW = Math.max(560, contentFloor.width + chromeW);
+        int minH = Math.max(660, contentFloor.height + chromeH);
+
+        GraphicsConfiguration gc = window.getGraphicsConfiguration();
+        if (gc == null) {
+            gc = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration();
+        }
+        Rectangle screen = gc.getBounds();
+        Insets screenInsets = Toolkit.getDefaultToolkit().getScreenInsets(gc);
+        int maxW = Math.max(minW, screen.width - screenInsets.left - screenInsets.right - 40);
+        int maxH = Math.max(minH, screen.height - screenInsets.top - screenInsets.bottom - 40);
+
+        return new Dimension(Math.min(minW, maxW), Math.min(minH, maxH));
+    }
+
+    private static void installMinimumSizeGuard(final Window window, final Dimension contentFloor) {
+        window.addComponentListener(new ComponentAdapter() {
+            private boolean adjusting;
+
+            @Override
+            public void componentResized(ComponentEvent event) {
+                if (adjusting) {
+                    return;
+                }
+                Dimension minimum = computeMinimumSize(window, contentFloor);
+                window.setMinimumSize(minimum);
+                int width = window.getWidth();
+                int height = window.getHeight();
+                int clampedW = Math.max(width, minimum.width);
+                int clampedH = Math.max(height, minimum.height);
+                if (clampedW != width || clampedH != height) {
+                    adjusting = true;
+                    try {
+                        window.setSize(clampedW, clampedH);
+                    } finally {
+                        adjusting = false;
+                    }
+                }
+            }
+        });
+        window.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowOpened(WindowEvent event) {
+                Dimension minimum = computeMinimumSize(window, contentFloor);
+                window.setMinimumSize(minimum);
+                int width = Math.max(window.getWidth(), minimum.width);
+                int height = Math.max(window.getHeight(), minimum.height);
+                if (width != window.getWidth() || height != window.getHeight()) {
+                    window.setSize(width, height);
+                }
+            }
+        });
+    }
+
+    /**
+     * Centers {@code content} when there is room; scrolls when the viewport is shorter/narrower
+     * so actions and footer hints never vanish off-screen.
+     */
+    static JScrollPane centeredScroll(JComponent content) {
+        CenteredHost host = new CenteredHost();
+        host.add(content);
+        return scrollPane(host);
     }
 
     private static Border textFieldBorder(Color color) {
@@ -635,7 +1153,45 @@ final class RelauncherUI {
         }
     }
 
+    /** Centers a single child and tracks the viewport when smaller so content stays centered. */
+    private static final class CenteredHost extends JPanel implements Scrollable {
+
+        private CenteredHost() {
+            super(new GridBagLayout());
+            setOpaque(false);
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return 18;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return Math.max(18, visibleRect.height - 36);
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            Container parent = getParent();
+            return parent == null || getPreferredSize().width <= parent.getWidth();
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            Container parent = getParent();
+            return parent == null || getPreferredSize().height <= parent.getHeight();
+        }
+
+    }
+
     private static final class RoundedBorder implements Border {
+
         private final Color color;
         private final int radius;
 
@@ -662,9 +1218,11 @@ final class RelauncherUI {
             g.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
             g.dispose();
         }
+
     }
 
     private static final class ModernCheckIcon implements Icon {
+
         @Override
         public int getIconWidth() {
             return 16;
@@ -686,15 +1244,17 @@ final class RelauncherUI {
             g.drawRoundRect(x, y, 15, 15, 5, 5);
             if (button.isSelected()) {
                 g.setColor(Color.WHITE);
-                g.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g.setStroke(new BasicStroke(1.8F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 g.drawLine(x + 4, y + 8, x + 7, y + 11);
                 g.drawLine(x + 7, y + 11, x + 12, y + 5);
             }
             g.dispose();
         }
+
     }
 
     private static final class ThemeToggle extends JToggleButton {
+
         private static final int SWITCH_WIDTH = 58;
         private static final int SWITCH_HEIGHT = 23;
 
@@ -802,9 +1362,11 @@ final class RelauncherUI {
                 g.fillOval(x, y, raySize, raySize);
             }
         }
+
     }
 
     private static final class ChevronIcon implements Icon {
+
         @Override
         public int getIconWidth() {
             return 12;
@@ -825,9 +1387,11 @@ final class RelauncherUI {
             g.drawLine(x + 6, y + 6, x + 10, y + 2);
             g.dispose();
         }
+
     }
 
     private static final class DarkComboBoxUI extends BasicComboBoxUI {
+
         @Override
         protected JButton createArrowButton() {
             JButton button = new JButton(new ChevronIcon());
@@ -886,9 +1450,11 @@ final class RelauncherUI {
                 }
             };
         }
+
     }
 
     private static final class DarkListCellRenderer implements ListCellRenderer<Object> {
+
         private final ListCellRenderer<Object> delegate;
 
         @SuppressWarnings("unchecked")
@@ -897,8 +1463,7 @@ final class RelauncherUI {
         }
 
         @Override
-        public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                                                       boolean isSelected, boolean cellHasFocus) {
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             Component rendered = delegate.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
             boolean popupSelection = index >= 0 && isSelected;
             rendered.setBackground(popupSelection ? PRIMARY : CONTROL);
@@ -909,9 +1474,11 @@ final class RelauncherUI {
             }
             return rendered;
         }
+
     }
 
     private static final class DarkScrollBarUI extends BasicScrollBarUI {
+
         @Override
         protected void configureScrollBarColors() {
             trackColor = BACKGROUND;
@@ -951,9 +1518,11 @@ final class RelauncherUI {
             button.setMaximumSize(new Dimension(0, 0));
             return button;
         }
+
     }
 
     private static final class ModernButtonUI extends BasicButtonUI {
+
         @Override
         public void installUI(JComponent component) {
             super.installUI(component);
@@ -961,46 +1530,218 @@ final class RelauncherUI {
             button.setOpaque(false);
             button.setContentAreaFilled(false);
             button.setBorderPainted(false);
+            button.setBorder(BorderFactory.createEmptyBorder());
+        }
+
+        @Override
+        public void update(Graphics graphics, JComponent component) {
+            // Skip ComponentUI's opaque fill, we paint it ourselves
+            paint(graphics, component);
         }
 
         @Override
         public void paint(Graphics graphics, JComponent component) {
             AbstractButton button = (AbstractButton) component;
             ButtonModel model = button.getModel();
+            boolean segmented = button.getClientProperty(SEGMENTED) != null;
             boolean primary = Boolean.TRUE.equals(button.getClientProperty(PRIMARY_BUTTON)) ||
-                    (button instanceof JToggleButton && model.isSelected());
-
-            Color fill;
-            Color outline;
-            Color foreground;
-            if (!button.isEnabled()) {
-                fill = SURFACE;
-                outline = BORDER;
-                foreground = DISABLED_TEXT;
-            } else if (primary) {
-                fill = model.isPressed() || model.isRollover() ? PRIMARY_HOVER : PRIMARY;
-                outline = fill;
-                foreground = Color.WHITE;
-            } else {
-                fill = model.isPressed() || model.isRollover() ? CONTROL_HOVER : CONTROL;
-                outline = model.isRollover() ? FOCUS : BORDER;
-                foreground = TEXT;
-            }
+                    (!segmented && button instanceof JToggleButton && model.isSelected());
+            boolean ghost = Boolean.TRUE.equals(button.getClientProperty(GHOST_BUTTON));
 
             Graphics2D g = (Graphics2D) graphics.create();
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g.setColor(fill);
-            g.fillRoundRect(0, 0, component.getWidth() - 1, component.getHeight() - 1, 10, 10);
-            g.setColor(outline);
-            g.drawRoundRect(0, 0, component.getWidth() - 1, component.getHeight() - 1, 10, 10);
-            if (button.hasFocus()) {
-                g.setColor(FOCUS);
-                g.drawRoundRect(2, 2, component.getWidth() - 5, component.getHeight() - 5, 8, 8);
+            g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+
+            Color foreground;
+            int width = component.getWidth();
+            int height = component.getHeight();
+
+            if (segmented) {
+                // Selection thumb is painted by SegmentedShell and the button is label-only.
+                foreground = model.isSelected() ? Color.WHITE : (button.isEnabled() ? TEXT : DISABLED_TEXT);
+            } else if (!button.isEnabled()) {
+                fillButton(g, SURFACE, BORDER, width, height, true);
+                foreground = DISABLED_TEXT;
+            } else if (primary) {
+                // One solid pill only
+                Color fill = model.isPressed() || model.isRollover() ? PRIMARY_HOVER : PRIMARY;
+                fillButton(g, fill, null, width, height, false);
+                foreground = Color.WHITE;
+            } else if (ghost) {
+                Color fill = model.isPressed() || model.isRollover() ? CONTROL_HOVER : SURFACE;
+                Color outline = model.isRollover() || model.isPressed() || button.hasFocus() ? FOCUS : BORDER;
+                fillButton(g, fill, outline, width, height, true);
+                foreground = TEXT;
+            } else {
+                Color fill = model.isPressed() || model.isRollover() ? CONTROL_HOVER : CONTROL;
+                Color outline = model.isRollover() || button.hasFocus() ? FOCUS : BORDER;
+                fillButton(g, fill, outline, width, height, true);
+                foreground = TEXT;
             }
             g.dispose();
 
             button.setForeground(foreground);
             super.paint(graphics, component);
         }
+
+        private static void fillButton(Graphics2D g, Color fill, Color outline, int width, int height, boolean drawOutline) {
+            // Fill the full bounds so AA doesn't leave a 1px "outer ring" of the background
+            int arc = Math.min(height, 12);
+            g.setColor(fill);
+            g.fillRoundRect(0, 0, width, height, arc, arc);
+            if (drawOutline && outline != null) {
+                g.setColor(outline);
+                g.drawRoundRect(0, 0, width - 1, height - 1, arc, arc);
+            }
+        }
+    }
+
+    /**
+     * Paints track + a single selection thumb. Child toggle buttons only render labels.
+     */
+    private static final class SegmentedShell extends JPanel {
+
+        private JToggleButton left;
+        private JToggleButton right;
+
+        private SegmentedShell() {
+            setOpaque(false);
+        }
+
+        private void bind(JToggleButton left, JToggleButton right) {
+            this.left = left;
+            this.right = right;
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+
+            int width = getWidth();
+            int height = getHeight();
+            float trackArc = height;
+
+            g.setColor(CONTROL);
+            g.fill(new RoundRectangle2D.Float(0, 0, width, height, trackArc, trackArc));
+            g.setColor(BORDER);
+            g.draw(new RoundRectangle2D.Float(0.5f, 0.5f, width - 1f, height - 1f, trackArc, trackArc));
+
+            JToggleButton selected = null;
+            if (left != null && left.isSelected()) {
+                selected = left;
+            } else if (right != null && right.isSelected()) {
+                selected = right;
+            }
+
+            if (selected != null) {
+                Insets insets = getInsets();
+                int innerW = Math.max(0, width - insets.left - insets.right);
+                int innerH = Math.max(0, height - insets.top - insets.bottom);
+                int thumbW = innerW / 2;
+                int thumbX = insets.left;
+                if (selected == right) {
+                    thumbX = insets.left + thumbW;
+                    thumbW = innerW - thumbW; // Absorb odd pixel on the right half
+                }
+                boolean pressed = selected.getModel().isPressed();
+                g.setColor(pressed ? PRIMARY_HOVER : PRIMARY);
+                float thumbArc = Math.max(8, innerH);
+                g.fill(new RoundRectangle2D.Float(thumbX, insets.top, thumbW, innerH, thumbArc, thumbArc));
+            }
+
+            g.dispose();
+            super.paintComponent(graphics);
+        }
+
+    }
+
+    private static final class BadgeLabelUI extends BasicLabelUI {
+
+        @Override
+        public void paint(Graphics graphics, JComponent component) {
+            JLabel label = (JLabel) component;
+            Object role = label.getClientProperty(BADGE_ROLE);
+            // Hidden badges keep layout size but paint nothing, prevents row height jumps
+            if ("hidden".equals(role)) {
+                return;
+            }
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            boolean emphasize = "primary".equals(role);
+            g.setColor(emphasize ? PRIMARY : CONTROL);
+            g.fillRoundRect(0, 0, component.getWidth(), component.getHeight(), 12, 12);
+            if (!emphasize) {
+                g.setColor(BORDER);
+                g.drawRoundRect(0, 0, component.getWidth() - 1, component.getHeight() - 1, 12, 12);
+            }
+            g.dispose();
+            super.paint(graphics, component);
+        }
+
+    }
+
+    private static final class ModernProgressBarUI extends BasicProgressBarUI {
+
+        @Override
+        protected void paintDeterminate(Graphics graphics, JComponent component) {
+            paintTrackAndFill(graphics, component, true);
+        }
+
+        @Override
+        protected void paintIndeterminate(Graphics graphics, JComponent component) {
+            paintTrackAndFill(graphics, component, false);
+        }
+
+        private void paintTrackAndFill(Graphics graphics, JComponent component, boolean determinate) {
+            Insets insets = progressBar.getInsets();
+            int width = progressBar.getWidth() - insets.right - insets.left;
+            int height = progressBar.getHeight() - insets.top - insets.bottom;
+            if (width <= 0 || height <= 0) {
+                return;
+            }
+
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int x = insets.left;
+            int y = insets.top;
+            int radius = Math.max(8, height);
+
+            g.setColor(CONTROL);
+            g.fillRoundRect(x, y, width, height, radius, radius);
+
+            if (determinate) {
+                int fill = getAmountFull(insets, width, height);
+                if (fill > 0) {
+                    g.setColor(PRIMARY);
+                    g.fillRoundRect(x, y, Math.max(height, fill), height, radius, radius);
+                }
+            } else {
+                boxRect = getBox(boxRect);
+                if (boxRect != null) {
+                    g.setColor(PRIMARY);
+                    int pulseWidth = Math.max(height * 3, boxRect.width);
+                    int pulseX = Math.min(x + width - pulseWidth, Math.max(x, boxRect.x));
+                    g.fillRoundRect(pulseX, y, pulseWidth, height, radius, radius);
+                }
+            }
+
+            if (progressBar.isStringPainted()) {
+                paintString(g, x, y, width, height, getAmountFull(insets, width, height), insets);
+            }
+            g.dispose();
+        }
+
+        @Override
+        protected Color getSelectionForeground() {
+            return TEXT;
+        }
+
+        @Override
+        protected Color getSelectionBackground() {
+            return TEXT;
+        }
+
     }
 }

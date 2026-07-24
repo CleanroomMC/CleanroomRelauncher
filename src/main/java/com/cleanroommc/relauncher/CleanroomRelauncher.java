@@ -87,7 +87,7 @@ public class CleanroomRelauncher {
         String wrapperDirectory = "wrapper/com/cleanroommc/relauncher/wrapper";
         String wrapperFile = wrapperDirectory + "/RelaunchMainWrapper.class";
 
-        File relauncherJarFile = null;
+        File relauncherJarFile;
         try {
             relauncherJarFile = JavaUtils.jarLocationOf(CleanroomRelauncher.class);
         } catch (IOException e) {
@@ -142,6 +142,7 @@ public class CleanroomRelauncher {
             throw new RuntimeException("Unable to extract relauncher's jar file", e);
         }
     }
+
     private static RelauncherGUI showGUI(
             List<CleanroomRelease> releases,
             CleanroomRelease selected,
@@ -154,30 +155,29 @@ public class CleanroomRelauncher {
             boolean updateNotification) {
 
         return RelauncherGUI.show(releases, $ -> {
-            $.selected        = selected;
-            $.javaPath        = javaPath;
-            $.targetSelected  = javaTarget;
-            $.vendorSelected  = javaVendor;
-            $.javaArgs        = javaArgs;
-            $.autoSetup       = autoSetup;
-            $.shouldScale     = isJvm8;
+            $.selected           = selected;
+            $.javaPath           = javaPath;
+            $.targetSelected     = javaTarget;
+            $.vendorSelected     = javaVendor;
+            $.javaArgs           = javaArgs;
+            $.autoSetup          = autoSetup;
+            $.shouldScale        = isJvm8;
             $.updateNotification = CONFIG.getFetchUpdatesEnabled() && updateNotification;
         });
     }
+
     public static void clearFolders() {
-
-
         if (CONFIG.getClearCleanroomFolderEnabled()) {
             deleteFolder(CLEANROOM_BASE.resolve("relauncher"));
             CONFIG.setClearCleanroomFolder(false);
 
         }
-
         if (CONFIG.getClearJavaProvisionFolderEnabled()) {
             deleteFolder(CLEANROOM_BASE.resolve("java"));
             CONFIG.setClearJavaProvisionFolder(false);
         }
     }
+
     public static void deleteFolder(Path folder) {
         if (!Files.exists(folder)) return;
 
@@ -194,6 +194,7 @@ public class CleanroomRelauncher {
             LOGGER.error("Failed to walk folder: {},{}", folder, e);
         }
     }
+
     static void run() {
         if (isCleanroom()) {
             LOGGER.info("Cleanroom detected. No need to relaunch!");
@@ -239,10 +240,8 @@ public class CleanroomRelauncher {
         }
         if (relauncherEnabled) {
             if (!autoSetup && (selected == null || javaPath == null || needsNotifyLatest)) {
-                while(javaPath == null || Objects.equals(javaPath, "")){
-                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs,
-                            javaTarget, javaVendor, autoSetup, !isJvm8(), false);
-
+                while (javaPath == null || Objects.equals(javaPath, "")) {
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, !isJvm8(), false);
                     if (gui.selected != null) {
                         selected = gui.selected;
                     } else{
@@ -268,10 +267,9 @@ public class CleanroomRelauncher {
                 notedLatestVersion = CONFIG.getLatestCleanroomVersion();
                 needsNotifyLatest = (notedLatestVersion == null || !notedLatestVersion.equals(latestRelease.name));
             }
-            if(autoSetup){
-                if(needsNotifyLatest) {
-                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs,
-                            javaTarget, javaVendor, autoSetup, isJvm8(), true);
+            if (autoSetup) {
+                if (needsNotifyLatest) {
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, isJvm8(), true);
                     selected = (gui.selected != null)? gui.selected : latestRelease;
                     javaPath = gui.javaPath;
                     javaArgs = gui.javaArgs;
@@ -280,15 +278,15 @@ public class CleanroomRelauncher {
                     autoSetup = gui.autoSetup;
 
                     javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
-                    if (!javaPath.isEmpty()){
+
+                    if (!javaPath.isEmpty()) {
                         CONFIG.setTargetJavaVersion(javaTarget);
                         CONFIG.setTargetVendor(javaVendor);
                     }
                 }
                 javaPath = validateOrProvisionJava(javaPath, javaTarget, javaVendor);
-                while(Objects.equals(javaPath, "")){
-                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs,
-                            javaTarget, javaVendor, autoSetup, isJvm8(), false);
+                while (Objects.equals(javaPath, "")) {
+                    RelauncherGUI gui = showGUI(releases, selected, javaPath, javaArgs, javaTarget, javaVendor, autoSetup, isJvm8(), false);
 
                     selected = (gui.selected != null)? gui.selected : latestRelease;
                     javaPath = gui.javaPath;
@@ -316,19 +314,17 @@ public class CleanroomRelauncher {
                     javaArgs = argBuilder.toString();
                 }
                 CONFIG.setJavaArguments(javaArgs);
-                if (javaTarget == null){
-                    javaTarget=JavaVersion.parseOrThrow(25);
+                if (javaTarget == null) {
+                    javaTarget = JavaVersion.parseOrThrow(25);
                     CONFIG.setTargetJavaVersion(javaTarget);
                 }
-                if (javaVendor == null){
-                    javaVendor=JavaDistro.ZULU;
+                if (javaVendor == null) {
+                    javaVendor = JavaDistro.ZULU;
                     CONFIG.setTargetVendor(javaVendor);
                 }
                 CONFIG.setCleanroomVersion(selected.name);
                 CONFIG.setJavaSelectionMode(autoSetup, javaTarget, javaVendor);
                 CONFIG.save();
-
-
             }
 
             CleanroomCache releaseCache = CleanroomCache.of(selected);
@@ -401,7 +397,8 @@ public class CleanroomRelauncher {
             }
         }
     }
-    public static boolean isJvm8(){
+
+    public static boolean isJvm8() {
         // Detect current JVM
         int currentJavaMajorVersion = 8;
         try {
@@ -415,7 +412,8 @@ public class CleanroomRelauncher {
         // J8 messes up scaling it seems
         return currentJavaMajorVersion == 8;
     }
-    public static boolean isJvm8Oracle(){
+
+    public static boolean isJvm8Oracle() {
         // Detect current JVM
         int currentJavaMajorVersion = 8;
         String vendor="";
@@ -432,4 +430,5 @@ public class CleanroomRelauncher {
         boolean isOracle = vendor != null && vendor.toLowerCase(Locale.ENGLISH).contains("oracle");
         return currentJavaMajorVersion == 8 && isOracle;
     }
+
 }

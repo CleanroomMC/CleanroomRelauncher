@@ -12,7 +12,6 @@ import com.cleanroommc.relauncher.util.enums.ArgsEnum;
 
 import javax.swing.*;
 import javax.swing.Timer;
-import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -35,122 +34,20 @@ public class ConfigGUI extends JDialog {
     static {
         RelauncherUI.install();
     }
-    private static void scaleComponent(Component component, float scale) {
-        // scaling rect
-        if (component instanceof JTextField ||
-                component instanceof AbstractButton ||
-                component instanceof JComboBox) {
-            Dimension size = component.getPreferredSize();
-            component.setPreferredSize(new Dimension((int) (size.width * scale) + 10, (int) (size.height * scale)));
-            component.setMaximumSize(new Dimension((int) (size.width * scale) + 10, (int) (size.height * scale)));
-        } else if (component instanceof JLabel) {
-            JLabel label = (JLabel) component;
-            Icon icon = label.getIcon();
-            if (icon instanceof ImageIcon) {
-                ImageIcon imageIcon = (ImageIcon) icon;
-                Image image = imageIcon.getImage();
-                if (image != null) {
-                    Image scaledImage = image.getScaledInstance(
-                            (int) (imageIcon.getIconWidth() * scale),
-                            (int) (imageIcon.getIconHeight() * scale),
-                            Image.SCALE_SMOOTH);
-                    label.setIcon(new ImageIcon(scaledImage));
-                }
-            }
-        }
 
-        // scaling font
-        if (component instanceof JLabel ||
-                component instanceof AbstractButton ||
-                component instanceof JTextField ||
-                component instanceof JComboBox) {
-            Font font = component.getFont();
-            if (font != null) {
-                component.setFont(font.deriveFont(font.getSize() * scale));
-            }
-        }
-
-        // scaling padding
-        if (component instanceof AbstractButton) {
-            AbstractButton button = (AbstractButton) component;
-            Insets margin = button.getMargin();
-            if (margin != null) {
-                button.setMargin(new Insets(
-                        (int) (margin.top * scale),
-                        (int) (margin.left * scale),
-                        (int) (margin.bottom * scale),
-                        (int) (margin.right * scale)
-                ));
-            }
-        } else if (component instanceof JTextField) {
-            JTextField textField = (JTextField) component;
-            Insets margin = textField.getMargin();
-            if (margin != null) {
-                textField.setMargin(new Insets(
-                        (int) (margin.top * scale),
-                        (int) (margin.left * scale),
-                        (int) (margin.bottom * scale),
-                        (int) (margin.right * scale)
-                ));
-            }
-        } else if (component instanceof JComboBox) {
-            JComboBox<?> comboBox = (JComboBox<?>) component;
-            Insets margin = comboBox.getInsets();
-            if (margin != null) {
-                comboBox.setBorder(BorderFactory.createEmptyBorder(
-                        (int) (margin.top * scale),
-                        (int) (margin.left * scale),
-                        (int) (margin.bottom * scale),
-                        (int) (margin.right * scale)
-                ));
-            }
-        } else if (component instanceof JLabel) {
-            JLabel label = (JLabel) component;
-            Insets margin = label.getInsets();
-            if (margin != null) {
-                label.setBorder(BorderFactory.createEmptyBorder(
-                        (int) (margin.top * scale),
-                        (int) (margin.left * scale),
-                        (int) (margin.bottom * scale),
-                        (int) (margin.right * scale)
-                ));
-            }
-        } else if (component instanceof JPanel) {
-            JPanel panel = (JPanel) component;
-            Border existingBorder = panel.getBorder();
-
-            Insets margin = existingBorder instanceof EmptyBorder ?
-                    ((EmptyBorder) existingBorder).getBorderInsets()
-                    : new Insets(0, 0, 0, 0);
-
-            panel.setBorder(BorderFactory.createEmptyBorder(
-                    (int) (margin.top * scale),
-                    (int) (margin.left * scale),
-                    (int) (margin.bottom * scale),
-                    (int) (margin.right * scale)
-            ));
-        }
-
-        component.revalidate();
-        component.repaint();
-
-        if (component instanceof Container) {
-            for (Component child : ((Container) component).getComponents()) {
-                scaleComponent(child, scale);
-            }
-        }
-    }
     public static ConfigGUI show(List<CleanroomRelease> eligibleReleases, Consumer<ConfigGUI> consumer) {
         ImageIcon imageIcon = new ImageIcon(Toolkit.getDefaultToolkit().getImage(ConfigGUI.class.getResource("/cleanroom-relauncher.png")));
         return new ConfigGUI(new SupportingFrame("Cleanroom Configuration", imageIcon), eligibleReleases, consumer);
     }
+
+    private final HashSet<ArgsEnum> args = new HashSet<>();
 
     public CleanroomRelease selected;
     public boolean autoSetup;
     public JavaVersion targetSelected;
     public JavaDistro vendorSelected;
     public String javaPath, javaArgs;
-    private final HashSet<ArgsEnum> args = new HashSet<>();
+
     public void updateJavaArgs() {
         StringBuilder argBuilder = new StringBuilder();
         if (targetSelected.major()< 25) {
@@ -219,10 +116,7 @@ public class ConfigGUI extends JDialog {
         this.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                selected = null;
-                frame.dispose();
-
-                CleanroomRelauncher.LOGGER.info("ConfigurationChange button was cancelled.");
+                discardAndClose();
             }
         });
         this.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -234,21 +128,27 @@ public class ConfigGUI extends JDialog {
 
         JPanel configScreen = ConfigScreen(eligibleReleases);
 
-
         this.add(configScreen);
         this.revalidate();
+        RelauncherUI.onEscape(this.getRootPane(), this::discardAndClose);
+
         float scale = Math.max(0.9f, Math.min(1.25f, rect.width / 1920f));
-        if (isJvm8()){
+        if (isJvm8()) {
             scale = Math.max(0.9f, scale / 1.15f);
         }
-        scaleComponent(this, scale);
+        RelauncherUI.scaleComponent(this, scale);
         RelauncherUI.styleTree(this);
 
         this.pack();
-        this.setSize(dialogSize);
-        this.setMinimumSize(new Dimension(520, 560));
+        RelauncherUI.sizeAndGuard(this, dialogSize, this.getPreferredSize());
         this.setLocationRelativeTo(null);
         RelauncherUI.showInitiallyInForeground(this);
+    }
+
+    private void discardAndClose() {
+        selected = null;
+        frame.dispose();
+        CleanroomRelauncher.LOGGER.info("ConfigurationChange button was cancelled.");
     }
     private JPanel ConfigScreen(List<CleanroomRelease> releases) {
         JPanel container = new JPanel(new BorderLayout());
@@ -258,14 +158,14 @@ public class ConfigGUI extends JDialog {
         mainContent.setBorder(new EmptyBorder(18, 24, 24, 24));
 
         mainContent.add(RelauncherUI.centeredHeader(frame.getIconImage(), "Cleanroom Settings",
-                "Changes are saved when you confirm below."));
-        mainContent.add(RelauncherUI.card("Cleanroom version", "Select the release to use on the next launch.",
+                "Changes apply on the next launch. Esc discards without saving."));
+        mainContent.add(RelauncherUI.card("Cleanroom Version", "Select the release to use on the next launch.",
                 this.initializeCleanroomPicker(releases)));
         mainContent.add(Box.createRigidArea(new Dimension(0, 12)));
-        mainContent.add(RelauncherUI.card("Java runtime", "Automatic setup is recommended for most players.",
+        mainContent.add(RelauncherUI.card("Java Runtime", "Automatic setup is recommended for most players.",
                 this.initializeJavaPicker()));
         mainContent.add(Box.createRigidArea(new Dimension(0, 12)));
-        mainContent.add(RelauncherUI.card("Java arguments", "Optional performance and compatibility flags.",
+        mainContent.add(RelauncherUI.card("Java Arguments", "Optional performance and compatibility flags.",
                 this.initializeArgsPanel()));
         JPanel relaunchPanel = this.initializeRelaunchPanel();
 
@@ -285,11 +185,9 @@ public class ConfigGUI extends JDialog {
         select.setLayout(new BoxLayout(select, BoxLayout.Y_AXIS));
         cleanroomPicker.add(select);
 
-        // Title label
-        JLabel title = RelauncherUI.fieldLabel("Version");
+        JLabel title = RelauncherUI.fieldLabelAbove("Version");
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
         select.add(title);
-        select.add(Box.createRigidArea(new Dimension(0, 5)));
 
         // Create dropdown panel
         JPanel dropdown = new JPanel(new BorderLayout(5, 5));
@@ -326,8 +224,8 @@ public class ConfigGUI extends JDialog {
             T selected,
             Consumer<T> onSelectionChange
     ){
-        JPanel panel = new JPanel(new BorderLayout(0, 6));
-        panel.add(RelauncherUI.fieldLabel(titleLabel), BorderLayout.NORTH);
+        JPanel panel = new JPanel(new BorderLayout(0, 0));
+        panel.add(RelauncherUI.fieldLabelAbove(titleLabel), BorderLayout.NORTH);
 
         JComboBox<T> targetBox = new JComboBox<>();
         DefaultComboBoxModel<T> targetModel = new DefaultComboBoxModel<>();
@@ -345,31 +243,41 @@ public class ConfigGUI extends JDialog {
         return panel;
     }
     private JPanel initializeJavaPicker() {
-        // Main Panel
-        JPanel javaPicker = new JPanel(new BorderLayout(5, 0));
+        JPanel javaPicker = new JPanel();
         javaPicker.setLayout(new BoxLayout(javaPicker, BoxLayout.Y_AXIS));
         javaPicker.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
 
-        // Toggle buttons
-        JToggleButton simplifiedBtn = new JToggleButton("Automatic Setup", autoSetup);
-        JToggleButton manualBtn = new JToggleButton("Choose Java Manually", !autoSetup);
+        JPanel modeHeader = new JPanel(new BorderLayout(8, 0));
+        modeHeader.setOpaque(false);
+        modeHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+        modeHeader.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        modeHeader.add(RelauncherUI.fieldLabel("Setup mode"), BorderLayout.WEST);
+        // Badge stays in the layout always (paint only toggles) so this row never jumps or clips.
+        JLabel recommended = RelauncherUI.badge("Recommended", true);
+        JPanel badgeWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        badgeWrap.setOpaque(false);
+        badgeWrap.add(recommended);
+        modeHeader.add(badgeWrap, BorderLayout.EAST);
+        javaPicker.add(modeHeader);
+        javaPicker.add(Box.createRigidArea(new Dimension(0, 6)));
 
-        ButtonGroup group = new ButtonGroup();
-        group.add(simplifiedBtn);
-        group.add(manualBtn);
+        final JLabel modeHelp = RelauncherUI.subtitle(autoSetup
+                ? "Downloads and configures a matching Java runtime for you."
+                : "Point Cleanroom at a Java 21+ executable you already have.");
+        modeHelp.setFont(modeHelp.getFont().deriveFont(12f));
+        modeHelp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        modeHelp.setBorder(BorderFactory.createEmptyBorder(0, 0, 12, 0));
+        modeHelp.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
 
-
-        JPanel radioPanel = new JPanel(new GridLayout(1, 2, 8, 0));
-        radioPanel.add(simplifiedBtn);
-        radioPanel.add(manualBtn);
-        radioPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 14, 0));
-        javaPicker.add(radioPanel);
-
-        JPanel switchableContainer = new JPanel(new BorderLayout());
-        javaPicker.add(switchableContainer);
-
+        // CardLayout keeps a stable outer height (max of both cards). Each card pins content
+        // to the top so shorter Automatic mode does not stretch the dropdowns.
+        final CardLayout modeCards = new CardLayout();
+        JPanel switchableContainer = new JPanel(modeCards);
+        switchableContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        switchableContainer.setOpaque(false);
 
         JPanel targetPanels = new JPanel(new GridLayout(1, 2, 12, 0));
+        targetPanels.setOpaque(false);
         JPanel versionPanel = this.initializeJavaTargetsPicker(
                 "Target Java version",
                 IntStream.rangeClosed(21, 26)
@@ -388,26 +296,25 @@ public class ConfigGUI extends JDialog {
         targetPanels.add(versionPanel);
         targetPanels.add(vendorPanel);
 
-        // Select Panel
         JPanel selectPanel = new JPanel(new BorderLayout());
-        JPanel subSelectPanel = new JPanel(new BorderLayout());
-        JLabel title = RelauncherUI.fieldLabel("Java executable");
+        selectPanel.setOpaque(false);
+        JPanel subSelectPanel = new JPanel(new BorderLayout(8, 0));
+        subSelectPanel.setOpaque(false);
+        JLabel title = RelauncherUI.fieldLabelAbove("Java executable");
         JTextField text = new JTextField(40);
         text.setText(javaPath);
-        JPanel northPanel = new JPanel();
-        northPanel.setLayout(new BorderLayout(5, 0));
+        JPanel northPanel = new JPanel(new BorderLayout(5, 0));
+        northPanel.setOpaque(false);
         northPanel.add(title, BorderLayout.NORTH);
         subSelectPanel.add(northPanel, BorderLayout.NORTH);
         subSelectPanel.add(text, BorderLayout.CENTER);
-        // JButton browse = new JButton(UIManager.getIcon("FileView.directoryIcon"));
         JButton browse = new JButton("Browse…");
         RelauncherUI.compact(browse);
         subSelectPanel.add(browse, BorderLayout.EAST);
         JLabel javaStatus = RelauncherUI.statusLabel("Choose a Java executable, or find an installed runtime.");
         subSelectPanel.add(javaStatus, BorderLayout.SOUTH);
-        selectPanel.add(subSelectPanel);
+        selectPanel.add(subSelectPanel, BorderLayout.NORTH);
 
-        // Java Version Dropdown
         JPanel versionDropdown = new JPanel(new BorderLayout(5, 0));
         versionDropdown.setAlignmentX(Component.LEFT_ALIGNMENT);
         JComboBox<JavaInstall> versionBox = new JComboBox<>();
@@ -438,49 +345,61 @@ public class ConfigGUI extends JDialog {
         versionDropdown.setVisible(false);
         northPanel.add(versionDropdown, BorderLayout.CENTER);
 
-        // Options Panel
         JPanel options = new JPanel(new GridLayout(1, 2, 8, 0));
+        options.setOpaque(false);
         options.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
         selectPanel.add(options, BorderLayout.SOUTH);
 
-        // Switch
-        ActionListener switchAction = e -> {
-            switchableContainer.removeAll();
-            if (simplifiedBtn.isSelected()) {
-                if (vendorSelected == null){
+        // Top-align each mode so the taller Manual card does not inflate Automatic dropdowns.
+        JPanel autoCard = new JPanel(new BorderLayout());
+        autoCard.setOpaque(false);
+        autoCard.add(targetPanels, BorderLayout.NORTH);
+        JPanel manualCard = new JPanel(new BorderLayout());
+        manualCard.setOpaque(false);
+        manualCard.add(selectPanel, BorderLayout.NORTH);
+
+        switchableContainer.add(autoCard, "auto");
+        switchableContainer.add(manualCard, "manual");
+
+        Consumer<Boolean> applyMode = automatic -> {
+            if (automatic) {
+                if (vendorSelected == null) {
                     vendorSelected = JavaDistro.ZULU;
                 }
-                if (targetSelected == null){
-                    targetSelected=JavaVersion.parseOrThrow(25);
+                if (targetSelected == null) {
+                    targetSelected = JavaVersion.parseOrThrow(25);
                 }
-                switchableContainer.add(targetPanels);
+                modeCards.show(switchableContainer, "auto");
                 autoSetup = true;
+                modeHelp.setText("Downloads and configures a matching Java runtime for you.");
+                RelauncherUI.setBadgeShown(recommended, true);
             } else {
-                switchableContainer.add(selectPanel);
+                modeCards.show(switchableContainer, "manual");
                 autoSetup = false;
+                modeHelp.setText("Point Cleanroom at a Java 21+ executable you already have.");
+                RelauncherUI.setBadgeShown(recommended, false);
             }
             RelauncherUI.styleTree(switchableContainer);
             switchableContainer.revalidate();
             switchableContainer.repaint();
         };
 
-        simplifiedBtn.addActionListener(switchAction);
-        manualBtn.addActionListener(switchAction);
-        // Initialize the switchableContainer
-        switchableContainer.removeAll();
-        if (autoSetup) {
-            switchableContainer.add(targetPanels);
-            simplifiedBtn.setSelected(true);
-        }else{
-            switchableContainer.add(selectPanel);
-            manualBtn.setSelected(true);
-        }
-        switchableContainer.revalidate();
-        switchableContainer.repaint();
+        RelauncherUI.SegmentedControl segmented = RelauncherUI.segmentedControl(
+                "Automatic",
+                "Manual",
+                autoSetup,
+                applyMode);
+        segmented.panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        javaPicker.add(segmented.panel);
+        javaPicker.add(modeHelp);
+        javaPicker.add(switchableContainer);
 
-        // JButton download = new JButton("Download");
+        applyMode.accept(autoSetup);
+
         JButton autoDetect = new JButton("Find Installed Java");
         JButton test = new JButton("Test Java");
+        autoDetect.setToolTipText("Scan common install locations for Java 21+");
+        test.setToolTipText("Verify the selected executable is Cleanroom-compatible");
         options.add(autoDetect);
         options.add(test);
 
@@ -496,12 +415,12 @@ public class ConfigGUI extends JDialog {
         });
 
         test.addActionListener(e -> {
-            String javaPath = text.getText();
-            if (javaPath.isEmpty()) {
+            String path = text.getText();
+            if (path.isEmpty()) {
                 RelauncherUI.status(javaStatus, "Select a Java executable before testing.", RelauncherUI.ERROR);
                 return;
             }
-            File javaFile = new File(javaPath);
+            File javaFile = new File(path);
             if (!javaFile.exists()) {
                 RelauncherUI.status(javaStatus, "The selected executable does not exist.", RelauncherUI.ERROR);
                 return;
@@ -577,7 +496,6 @@ public class ConfigGUI extends JDialog {
                 }
 
             }.execute();
-
         });
 
         return javaPicker;
@@ -588,10 +506,10 @@ public class ConfigGUI extends JDialog {
         JPanel argsPanel = new JPanel(new BorderLayout(0, 10));
         argsPanel.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
 
-        JLabel title = RelauncherUI.fieldLabel("Arguments preview");
+        JLabel title = RelauncherUI.fieldLabelAbove("Arguments preview");
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
         JTextField text = new JTextField(40);
-        text.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        // Same UI face as the rest of the app — monospaced felt robotic for short flag strings.
         text.setText(javaArgs);
         listenToTextFieldUpdate(text, t -> javaArgs = t.getText());
 
@@ -606,7 +524,6 @@ public class ConfigGUI extends JDialog {
         previewHelp.setFont(previewHelp.getFont().deriveFont(12f));
         previewHelp.setAlignmentX(Component.LEFT_ALIGNMENT);
         previewPanel.add(title);
-        previewPanel.add(Box.createRigidArea(new Dimension(0, 6)));
         previewPanel.add(text);
         previewPanel.add(Box.createRigidArea(new Dimension(0, 4)));
         previewPanel.add(previewHelp);
@@ -627,15 +544,16 @@ public class ConfigGUI extends JDialog {
         };
 
         boolean javaArgsSupplied = javaArgs != null && !javaArgs.isEmpty();
-        for(ArgsEnum arg : ArgsEnum.values()) {
+        for (ArgsEnum arg : ArgsEnum.values()) {
             if (arg != ArgsEnum.UnlockExperimentalOptions) {
                 JCheckBox checkBox = new JCheckBox(RelauncherUI.argumentLabel(arg));
+                checkBox.setToolTipText(RelauncherUI.argumentTooltip(arg));
 
                 boolean isPresentInArgs = RelauncherConfiguration.read().argsContain(arg);
                 checkBox.setSelected(isPresentInArgs);
-                if (javaArgsSupplied){
+                if (javaArgsSupplied) {
                     checkBox.setSelected(isPresentInArgs);
-                    if (isPresentInArgs){
+                    if (isPresentInArgs) {
                         args.add(arg);
                     }
                     syncTextField.run();
@@ -648,7 +566,7 @@ public class ConfigGUI extends JDialog {
                     }
                     if (autoSetup) {
                         updateJavaArgs();
-                    }else{
+                    } else {
                         updateJavaArgsPath();
                     }
                     syncTextField.run();
@@ -668,18 +586,22 @@ public class ConfigGUI extends JDialog {
 
         JButton configSaveButton = new JButton("Save Settings");
         RelauncherUI.primary(configSaveButton);
+        configSaveButton.setToolTipText("Save and apply on next launch (Enter)");
         this.getRootPane().setDefaultButton(configSaveButton);
         configSaveButton.addActionListener(e -> {
             if (selected == null) {
-                JOptionPane.showMessageDialog(this, "Please select a Cleanroom version before saving.", "Cleanroom Release Not Selected", JOptionPane.ERROR_MESSAGE);
+                RelauncherUI.showError(this, "Cleanroom Release Not Selected",
+                        "Please select a Cleanroom version before saving.");
                 return;
             }
             if (!autoSetup && (javaPath == null || javaPath.trim().isEmpty())) {
-                JOptionPane.showMessageDialog(this, "Please provide a valid Java Executable in order to relaunch.", "Java Executable Not Selected", JOptionPane.ERROR_MESSAGE);
+                RelauncherUI.showError(this, "Java Executable Not Selected",
+                        "Please provide a valid Java executable before saving.");
                 return;
             }
             if (autoSetup && (targetSelected == null || vendorSelected == null)) {
-                JOptionPane.showMessageDialog(this, "Please select a valid Java target/vendor in order to relaunch.", "Java Target/Vendor Not Selected", JOptionPane.ERROR_MESSAGE);
+                RelauncherUI.showError(this, "Java Target/Vendor Not Selected",
+                        "Please select a valid Java target and vendor before saving.");
                 return;
             }
             if (!autoSetup) {
@@ -702,10 +624,9 @@ public class ConfigGUI extends JDialog {
             frame.dispose();
         });
         JButton configCancelButton = new JButton("Discard Changes");
-        configCancelButton.addActionListener(e -> {
-            selected = null;
-            frame.dispose();
-        });
+        RelauncherUI.ghost(configCancelButton);
+        configCancelButton.setToolTipText("Close without saving (Esc)");
+        configCancelButton.addActionListener(e -> discardAndClose());
         configButtonPanel.add(configCancelButton);
         configButtonPanel.add(configSaveButton);
 
@@ -740,12 +661,15 @@ public class ConfigGUI extends JDialog {
             JavaInstall javaInstall = JavaUtils.parseInstall(javaPath);
             if (javaInstall.version().major() < 21) {
                 CleanroomRelauncher.LOGGER.fatal("Java 21+ needed, user specified Java {} instead", javaInstall.version());
-                return () -> JOptionPane.showMessageDialog(this, "Java 21 is the minimum version for Cleanroom. Currently, Java " + javaInstall.version().major() + " is selected.", "Old Java Version", JOptionPane.ERROR_MESSAGE);
+                return () -> RelauncherUI.showError(this, "Old Java Version",
+                        "Java 21 is the minimum version for Cleanroom. Currently, Java "
+                                + javaInstall.version().major() + " is selected.");
             }
             CleanroomRelauncher.LOGGER.info("Java {} specified from {}", javaInstall.version().major(), javaPath);
         } catch (IOException | RuntimeException e) {
             CleanroomRelauncher.LOGGER.fatal("Failed to execute Java for testing", e);
-            return () -> JOptionPane.showMessageDialog(this, "Failed to test Java (more information in console): " + e.getMessage(), "Java Test Failed", JOptionPane.ERROR_MESSAGE);
+            return () -> RelauncherUI.showError(this, "Java Test Failed",
+                    "Failed to test Java (more information in console): " + e.getMessage());
         }
         return null;
     }

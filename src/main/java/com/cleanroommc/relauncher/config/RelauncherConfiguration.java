@@ -94,6 +94,10 @@ public class RelauncherConfiguration {
         return FetchUpdates;
     }
 
+    public void setFetchUpdatesEnabled(boolean fetchUpdates) {
+        this.FetchUpdates = fetchUpdates;
+    }
+
     public boolean getClearCleanroomFolderEnabled() {
         return clearCleanroomFolder;
     }

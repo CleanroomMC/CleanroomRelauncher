@@ -17,10 +17,13 @@ import static com.cleanroommc.relauncher.CleanroomRelauncher.CONFIG;
 
 public class GUIRelauncherMenu extends GuiScreen {
 
-    private final GuiScreen parentScreen;
     private static final int ENABLE_BTN_ID = 1;
     private static final int SETTINGS_BTN_ID = 2;
-    private static final int DONE_BTN_ID = 3;
+    private static final int UPDATES_BTN_ID = 3;
+    private static final int DONE_BTN_ID = 4;
+
+    private final GuiScreen parentScreen;
+
     private GuiButton settingsButton;
     private volatile String statusMessage = "Changes take effect the next time Minecraft starts.";
 
@@ -32,15 +35,20 @@ public class GUIRelauncherMenu extends GuiScreen {
     public void initGui() {
         this.buttonList.clear();
 
-        int panelTop = Math.max(54, this.height / 2 - 70);
-        this.buttonList.add(new GuiButton(ENABLE_BTN_ID, this.width / 2 - 110, panelTop, 220, 20,
+        int panelTop = Math.max(72, this.height / 2 - 78);
+        int buttonWidth = 220;
+        int left = this.width / 2 - buttonWidth / 2;
+
+        this.buttonList.add(new GuiButton(ENABLE_BTN_ID, left, panelTop, buttonWidth, 20,
                 relauncherStatusText(CONFIG.getRelauncherEnabled())));
 
-        settingsButton = new GuiButton(SETTINGS_BTN_ID, this.width / 2 - 110, panelTop + 28, 220, 20,
-                "Configure Relauncher…");
-        this.buttonList.add(settingsButton);
-        this.buttonList.add(new GuiButton(DONE_BTN_ID, this.width / 2 - 110, panelTop + 84, 220, 20,
-                I18n.format("gui.done")));
+        this.buttonList.add(new GuiButton(UPDATES_BTN_ID, left, panelTop + 28, buttonWidth, 20,
+                updatesStatusText(CONFIG.getFetchUpdatesEnabled())));
+
+        this.settingsButton = new GuiButton(SETTINGS_BTN_ID, left, panelTop + 56, buttonWidth, 20, "Configure Relauncher…");
+
+        this.buttonList.add(this.settingsButton);
+        this.buttonList.add(new GuiButton(DONE_BTN_ID, left, panelTop + 100, buttonWidth, 20, I18n.format("gui.done")));
     }
 
     @Override
@@ -50,6 +58,17 @@ public class GUIRelauncherMenu extends GuiScreen {
             CONFIG.setRelauncherEnabled(newState);
             CONFIG.save();
             button.displayString = relauncherStatusText(newState);
+            statusMessage = newState
+                    ? "Relauncher enabled. It will run on the next launch."
+                    : "Relauncher disabled. Minecraft will start without Cleanroom setup.";
+        } else if (button.id == UPDATES_BTN_ID) {
+            boolean newState = !CONFIG.getFetchUpdatesEnabled();
+            CONFIG.setFetchUpdatesEnabled(newState);
+            CONFIG.save();
+            button.displayString = updatesStatusText(newState);
+            statusMessage = newState
+                    ? "Update checks enabled. New Cleanroom releases will be offered."
+                    : "Update checks disabled. Cached release data will be reused when possible.";
         } else if (button.id == SETTINGS_BTN_ID) {
             openSettings();
         } else if (button.id == DONE_BTN_ID) {
@@ -130,16 +149,67 @@ public class GUIRelauncherMenu extends GuiScreen {
                 statusMessage = "\u00A7cCould not load releases. Check your connection and try again.";
                 restoreSettingsButton();
             }
-        }, "Cleanroom release lookup").start();
+        }, "Cleanroom Release Lookup").start();
     }
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         this.drawDefaultBackground();
-        int titleY = Math.max(22, this.height / 2 - 124);
+
+        int titleY = Math.max(18, this.height / 2 - 132);
         this.drawCenteredString(this.fontRenderer, "Cleanroom Relauncher", this.width / 2, titleY, 0xFFFFFF);
-        this.drawCenteredString(this.fontRenderer, statusMessage, this.width / 2, titleY + 18, 0xA9B8C6);
+        this.drawCenteredString(this.fontRenderer, statusMessage, this.width / 2, titleY + 14, 0xA9B8C6);
+
+        String summary = buildConfigSummary();
+        this.drawCenteredString(this.fontRenderer, summary, this.width / 2, titleY + 30, 0x7F8C9A);
+
         super.drawScreen(mouseX, mouseY, partialTicks);
+
+        // Button tooltips
+        for (GuiButton button : this.buttonList) {
+            if (button.isMouseOver()) {
+                String tip = tooltipFor(button.id);
+                if (tip != null) {
+                    this.drawHoveringText(java.util.Collections.singletonList(tip), mouseX, mouseY);
+                }
+                break;
+            }
+        }
+    }
+
+    private String tooltipFor(int buttonId) {
+        if (buttonId == ENABLE_BTN_ID) {
+            return CONFIG.getRelauncherEnabled()
+                    ? "Click to disable Cleanroom relaunch on startup"
+                    : "Click to enable Cleanroom relaunch on startup";
+        }
+        if (buttonId == UPDATES_BTN_ID) {
+            return CONFIG.getFetchUpdatesEnabled()
+                    ? "Click to stop checking GitHub for new Cleanroom versions"
+                    : "Click to check for new Cleanroom versions on launch";
+        }
+        if (buttonId == SETTINGS_BTN_ID) {
+            return "Open version, Java runtime, and JVM argument settings";
+        }
+        return null;
+    }
+
+    private String buildConfigSummary() {
+        String version = CONFIG.getCleanroomVersion();
+        if (version == null || version.isEmpty()) {
+            version = "not selected";
+        }
+        String javaPart;
+        if (CONFIG.getAutoSetup()) {
+            JavaVersion target = CONFIG.getJavaTarget();
+            JavaDistro vendor = CONFIG.getJavaVendor();
+            String vendorName = vendor == null ? "auto" : vendor.name();
+            javaPart = "Java " + target.major() + " · " + vendorName;
+        } else {
+            String path = CONFIG.getJavaExecutablePath();
+            javaPart = path == null || path.isEmpty() ? "manual Java unset" : "manual Java";
+        }
+        return "Version " + version + "  ·  " + javaPart;
     }
 
     private void restoreSettingsButton() {
@@ -151,6 +221,10 @@ public class GUIRelauncherMenu extends GuiScreen {
 
     private static String relauncherStatusText(boolean enabled) {
         return "Relauncher  " + (enabled ? "\u00A7aEnabled" : "\u00A7cDisabled");
+    }
+
+    private static String updatesStatusText(boolean enabled) {
+        return "Update Checks  " + (enabled ? "\u00A7aOn" : "\u00A7cOff");
     }
 
     private static List<CleanroomRelease> releases() {
