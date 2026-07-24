@@ -27,18 +27,21 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class ConfigGUI extends JDialog {
+public class ConfigGUI extends JFrame {
 
     static {
         RelauncherUI.install();
     }
 
     public static ConfigGUI show(List<CleanroomRelease> eligibleReleases, Consumer<ConfigGUI> consumer) {
-        ImageIcon imageIcon = new ImageIcon(Toolkit.getDefaultToolkit().getImage(ConfigGUI.class.getResource("/cleanroom-relauncher.png")));
-        return new ConfigGUI(new SupportingFrame("Cleanroom Configuration", imageIcon), eligibleReleases, consumer);
+        Image icon = Toolkit.getDefaultToolkit().getImage(ConfigGUI.class.getResource("/cleanroom-relauncher.png"));
+        ConfigGUI gui = new ConfigGUI("Cleanroom Configuration", icon, eligibleReleases, consumer);
+        RelauncherUI.showAndWait(gui);
+        return gui;
     }
 
     private final HashSet<ArgsEnum> args = new HashSet<>();
+    private final Image windowIcon;
 
     public CleanroomRelease selected;
     public boolean autoSetup;
@@ -85,11 +88,9 @@ public class ConfigGUI extends JDialog {
         javaArgs = argBuilder.toString();
     }
 
-    private final JFrame frame;
-
-    private ConfigGUI(SupportingFrame frame, List<CleanroomRelease> eligibleReleases, Consumer<ConfigGUI> consumer) {
-        super(frame, frame.getTitle(), true);
-        this.frame = frame;
+    private ConfigGUI(String title, Image icon, List<CleanroomRelease> eligibleReleases, Consumer<ConfigGUI> consumer) {
+        super(title);
+        this.windowIcon = icon;
 
         consumer.accept(this);
         if (selected == null && !eligibleReleases.isEmpty()) {
@@ -104,7 +105,7 @@ public class ConfigGUI extends JDialog {
             }
         }
 
-        this.setIconImage(frame.getIconImage());
+        this.setIconImage(windowIcon);
 
         this.addMouseListener(new MouseAdapter() {
             @Override
@@ -119,7 +120,7 @@ public class ConfigGUI extends JDialog {
                 discardAndClose();
             }
         });
-        this.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
         GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
         GraphicsDevice screen = env.getDefaultScreenDevice();
@@ -140,12 +141,11 @@ public class ConfigGUI extends JDialog {
         this.pack();
         RelauncherUI.sizeAndGuard(this, dialogSize, this.getPreferredSize());
         this.setLocationRelativeTo(null);
-        RelauncherUI.showInitiallyInForeground(this);
     }
 
     private void discardAndClose() {
         selected = null;
-        frame.dispose();
+        dispose();
         CleanroomRelauncher.LOGGER.info("ConfigurationChange button was cancelled.");
     }
     private JPanel ConfigScreen(List<CleanroomRelease> releases) {
@@ -155,7 +155,7 @@ public class ConfigGUI extends JDialog {
         JPanel mainContent = RelauncherUI.scrollableColumn();
         mainContent.setBorder(new EmptyBorder(18, 24, 24, 24));
 
-        mainContent.add(RelauncherUI.centeredHeader(frame.getIconImage(), "Cleanroom Settings",
+        mainContent.add(RelauncherUI.centeredHeader(windowIcon, "Cleanroom Settings",
                 "Changes apply on the next launch. Esc discards without saving."));
         mainContent.add(RelauncherUI.card("Cleanroom Version", "Select the release to use on the next launch.",
                 this.initializeCleanroomPicker(releases)));
@@ -619,7 +619,7 @@ public class ConfigGUI extends JDialog {
                 }
             }
 
-            frame.dispose();
+            dispose();
         });
         JButton configCancelButton = new JButton("Discard Changes");
         RelauncherUI.ghost(configCancelButton);

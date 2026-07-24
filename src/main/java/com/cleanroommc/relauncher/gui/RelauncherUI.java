@@ -23,6 +23,7 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
 import java.io.File;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -230,7 +231,44 @@ final class RelauncherUI {
         window.setVisible(true);
     }
 
-    static File chooseJavaExecutable(Dialog owner, String currentPath) {
+    /**
+     * Shows a frame on the EDT and blocks until it is disposed.
+     * Same pattern as a modal dialog, but the window is a real {@link Frame} so taskbar icons and
+     * thumbnails work (unlike an empty owner frame), as it was previously done...
+     */
+    static void showAndWait(final Window window) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            try {
+                SwingUtilities.invokeAndWait(() -> showAndWait(window));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (InvocationTargetException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof RuntimeException) {
+                    throw (RuntimeException) cause;
+                }
+                if (cause instanceof Error) {
+                    throw (Error) cause;
+                }
+                throw new RuntimeException(cause);
+            }
+            return;
+        }
+
+        final SecondaryLoop loop = Toolkit.getDefaultToolkit().getSystemEventQueue().createSecondaryLoop();
+        window.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent event) {
+                loop.exit();
+            }
+        });
+        showInitiallyInForeground(window);
+        if (window.isDisplayable()) {
+            loop.enter();
+        }
+    }
+
+    static File chooseJavaExecutable(Frame owner, String currentPath) {
         FileDialog chooser = new FileDialog(owner, "Find Java Executable", FileDialog.LOAD);
         chooser.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
         chooser.setAlwaysOnTop(false);

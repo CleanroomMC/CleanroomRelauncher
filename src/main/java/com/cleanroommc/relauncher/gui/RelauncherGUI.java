@@ -29,18 +29,21 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class RelauncherGUI extends JDialog {
+public class RelauncherGUI extends JFrame {
 
     static {
         RelauncherUI.install();
     }
 
     public static RelauncherGUI show(List<CleanroomRelease> eligibleReleases, Consumer<RelauncherGUI> consumer) {
-        ImageIcon imageIcon = new ImageIcon(Toolkit.getDefaultToolkit().getImage(RelauncherGUI.class.getResource("/cleanroom-relauncher.png")));
-        return new RelauncherGUI(new SupportingFrame("Cleanroom Relauncher", imageIcon), eligibleReleases, consumer);
+        Image icon = Toolkit.getDefaultToolkit().getImage(RelauncherGUI.class.getResource("/cleanroom-relauncher.png"));
+        RelauncherGUI gui = new RelauncherGUI("Cleanroom Relauncher", icon, eligibleReleases, consumer);
+        RelauncherUI.showAndWait(gui);
+        return gui;
     }
 
     private final HashSet<ArgsEnum> args = new HashSet<>();
+    private final Image windowIcon;
 
     public CleanroomRelease selected;
     public JavaVersion targetSelected = JavaVersion.parseOrThrow(25);
@@ -88,7 +91,6 @@ public class RelauncherGUI extends JDialog {
         javaArgs = argBuilder.toString();
     }
 
-    private final JFrame frame;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(cardLayout);
     private JComboBox<CleanroomRelease> cleanroomReleaseBox;
@@ -137,7 +139,7 @@ public class RelauncherGUI extends JDialog {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(new EmptyBorder(28, 48, 32, 48));
 
-        JLabel logo = new JLabel(new ImageIcon(frame.getIconImage().getScaledInstance(112, 112, Image.SCALE_SMOOTH)));
+        JLabel logo = new JLabel(new ImageIcon(windowIcon.getScaledInstance(112, 112, Image.SCALE_SMOOTH)));
         logo.setAlignmentX(Component.CENTER_ALIGNMENT);
         logo.setBorder(new EmptyBorder(0, 0, 20, 0));
 
@@ -171,7 +173,7 @@ public class RelauncherGUI extends JDialog {
             autoSetup = true;
             // Match the card: latest release + automatic Java, not leftover Advanced selections.
             selected = releases.isEmpty() ? null : releases.get(0);
-            frame.dispose();
+            dispose();
         });
         JButton advancedBtn = new JButton("Advanced Settings");
         RelauncherUI.ghost(advancedBtn);
@@ -217,7 +219,7 @@ public class RelauncherGUI extends JDialog {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(new EmptyBorder(28, 44, 32, 44));
 
-        JLabel logo = new JLabel(new ImageIcon(frame.getIconImage().getScaledInstance(96, 96, Image.SCALE_SMOOTH)));
+        JLabel logo = new JLabel(new ImageIcon(windowIcon.getScaledInstance(96, 96, Image.SCALE_SMOOTH)));
         logo.setAlignmentX(Component.CENTER_ALIGNMENT);
         logo.setBorder(new EmptyBorder(0, 0, 18, 0));
 
@@ -242,7 +244,7 @@ public class RelauncherGUI extends JDialog {
         fastUpdateBtn.addActionListener(e -> {
             autoSetup = true;
             selected = null;
-            frame.dispose();
+            dispose();
         });
 
         JButton skipBtn = new JButton("Keep Current");
@@ -250,7 +252,7 @@ public class RelauncherGUI extends JDialog {
         skipBtn.setToolTipText("Stay on " + currentName + " for now");
         skipBtn.addActionListener(e -> {
             autoSetup = true;
-            frame.dispose();
+            dispose();
         });
 
         JButton advancedBtn = new JButton("Advanced Settings");
@@ -300,7 +302,7 @@ public class RelauncherGUI extends JDialog {
         JPanel mainContent = RelauncherUI.scrollableColumn();
         mainContent.setBorder(new EmptyBorder(18, 24, 24, 24));
 
-        mainContent.add(RelauncherUI.centeredHeader(frame.getIconImage(), "Advanced Settings",
+        mainContent.add(RelauncherUI.centeredHeader(windowIcon, "Advanced Settings",
                 "Choose version, Java runtime, and optional JVM flags. Esc to return to the main menu."));
         mainContent.add(RelauncherUI.card("Cleanroom Version", "Select the release to use.",
                 this.initializeCleanroomPicker(releases)));
@@ -319,13 +321,13 @@ public class RelauncherGUI extends JDialog {
 
         return container;
     }
-    private RelauncherGUI(SupportingFrame frame, List<CleanroomRelease> eligibleReleases, Consumer<RelauncherGUI> consumer) {
-        super(frame, frame.getTitle(), true);
-        this.frame = frame;
+    private RelauncherGUI(String title, Image icon, List<CleanroomRelease> eligibleReleases, Consumer<RelauncherGUI> consumer) {
+        super(title);
+        this.windowIcon = icon;
 
         consumer.accept(this);
 
-        this.setIconImage(frame.getIconImage());
+        this.setIconImage(windowIcon);
 
         this.addMouseListener(new MouseAdapter() {
             @Override
@@ -340,7 +342,7 @@ public class RelauncherGUI extends JDialog {
                 dismissWithoutRelaunch();
             }
         });
-        this.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
         GraphicsDevice screen = env.getDefaultScreenDevice();
         Rectangle rect = screen.getDefaultConfiguration().getBounds();
@@ -372,12 +374,11 @@ public class RelauncherGUI extends JDialog {
         // Floor against the non-scrolling start/update card so buttons/hints stay reachable
         RelauncherUI.sizeAndGuard(this, dialogSize, startCard.getPreferredSize());
         this.setLocationRelativeTo(null);
-        RelauncherUI.showInitiallyInForeground(this);
     }
 
     private void dismissWithoutRelaunch() {
         selected = null;
-        frame.dispose();
+        dispose();
         CleanroomRelauncher.LOGGER.info("No Cleanroom releases were selected, instance is dismissed.");
         ExitVMBypass.exit(0);
     }
@@ -826,7 +827,7 @@ public class RelauncherGUI extends JDialog {
             } else {
                 updateJavaArgsPath();
             }
-            frame.dispose();
+            dispose();
         });
         relaunchButtonPanel.add(backButton);
         relaunchButtonPanel.add(relaunchButton);
