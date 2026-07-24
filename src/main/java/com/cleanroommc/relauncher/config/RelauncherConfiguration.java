@@ -54,6 +54,8 @@ public class RelauncherConfiguration {
     private boolean clearCleanroomFolder=false;
     @SerializedName("clearJavaProvisionFolder")
     private boolean clearJavaProvisionFolder=false;
+    @SerializedName("darkMode")
+    private Boolean darkMode = Boolean.TRUE;
 
     public String getCleanroomVersion() {
         return cleanroomVersion;
@@ -97,6 +99,10 @@ public class RelauncherConfiguration {
     }
     public boolean getClearJavaProvisionFolderEnabled() {
         return clearJavaProvisionFolder;
+    }
+
+    public boolean getDarkMode() {
+        return darkMode == null || darkMode;
     }
 
     public void setCleanroomVersion(String cleanroomVersion) {
@@ -147,6 +153,10 @@ public class RelauncherConfiguration {
     }
     public void setClearJavaProvisionFolder(boolean value) {
         this.clearJavaProvisionFolder = value;
+    }
+
+    public void setDarkMode(boolean darkMode) {
+        this.darkMode = darkMode;
     }
 
     public void save() {

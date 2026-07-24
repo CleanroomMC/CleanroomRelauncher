@@ -18,7 +18,7 @@ public class LoadingGUI {
         frame.setLayout(new BorderLayout());
 
         JPanel panel = new JPanel(new BorderLayout(0, 22));
-        panel.setBackground(RelauncherUI.BACKGROUND);
+        RelauncherUI.backgroundPanel(panel);
         panel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(RelauncherUI.BORDER),
                 BorderFactory.createEmptyBorder(30, 36, 32, 36)
@@ -48,7 +48,7 @@ public class LoadingGUI {
         progressBar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 14));
         progressBar.setIndeterminate(true);
         progressBar.setForeground(RelauncherUI.PRIMARY);
-        progressBar.setBackground(new Color(225, 232, 238));
+        progressBar.setBackground(RelauncherUI.CONTROL);
         progressBar.setBorderPainted(false);
         progressContent.add(progressBar);
         panel.add(progressContent, BorderLayout.CENTER);
@@ -59,7 +59,7 @@ public class LoadingGUI {
     }
 
     public void show() {
-        SwingUtilities.invokeLater(() -> frame.setVisible(true));
+        SwingUtilities.invokeLater(() -> RelauncherUI.showInitiallyInForeground(frame));
     }
     public void enableProgress() {
         if (progressBar.isIndeterminate()) {
