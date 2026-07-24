@@ -642,24 +642,16 @@ public class ConfigGUI extends JDialog {
                 }
                 checkBox.addItemListener(e -> {
                     if (e.getStateChange() == ItemEvent.SELECTED) {
-                        CleanroomRelauncher.LOGGER.info("Adding {} Argument {}", arg.name(), arg.getStatus());
                         args.add(arg);
-                        if (autoSetup){
-                            updateJavaArgs();
-                        }else{
-                            updateJavaArgsPath();
-                        }
                     } else {
-                        CleanroomRelauncher.LOGGER.info("Removing {} Argument {}", arg.name(), arg.getStatus());
                         args.remove(arg);
-                        if (autoSetup){
-                            updateJavaArgs();
-                        }else{
-                            updateJavaArgsPath();
-                        }
+                    }
+                    if (autoSetup) {
+                        updateJavaArgs();
+                    }else{
+                        updateJavaArgsPath();
                     }
                     syncTextField.run();
-                    CleanroomRelauncher.LOGGER.warn("args are now {}", javaArgs);
                 });
 
                 JPanel optionsPanel = RelauncherUI.optionRow(checkBox, RelauncherUI.argumentDescription(arg));
@@ -690,13 +682,13 @@ public class ConfigGUI extends JDialog {
                 JOptionPane.showMessageDialog(this, "Please select a valid Java target/vendor in order to relaunch.", "Java Target/Vendor Not Selected", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            if (!autoSetup){
+            if (!autoSetup) {
                 vendorSelected = null;
                 targetSelected = null;
             }
-            if (autoSetup){
+            if (autoSetup) {
                 updateJavaArgs();
-            }else{
+            } else {
                 updateJavaArgsPath();
             }
             if (!autoSetup) {
