@@ -3,7 +3,6 @@ package com.cleanroommc.relauncher;
 import com.cleanroommc.javautils.JavaUtils;
 import com.cleanroommc.javautils.api.JavaDistro;
 import com.cleanroommc.javautils.api.JavaVersion;
-import com.cleanroommc.javautils.spi.JavaProvisioner;
 import com.cleanroommc.relauncher.config.RelauncherConfiguration;
 import com.cleanroommc.relauncher.download.CleanroomRelease;
 import com.cleanroommc.relauncher.download.cache.CleanroomCache;
@@ -36,10 +35,8 @@ public class CleanroomRelauncher {
     public static final Logger LOGGER = LogManager.getLogger("CleanroomRelauncher");
     public static final Gson GSON = new Gson();
     public static final Path CACHE_DIR = Paths.get(System.getProperty("user.home"), ".cleanroom", "relauncher");
-    public static Path CLEANROOM_BASE = Paths.get(System.getProperty("user.home"), ".cleanroom");
-    public static JavaProvisioner javaProvisioner;
-
-    public static RelauncherConfiguration CONFIG = RelauncherConfiguration.read();
+    public static final Path JAVA_PROVISION_DIR = Paths.get(System.getProperty("user.home"), ".cleanroom", "java");
+    public static final RelauncherConfiguration CONFIG = RelauncherConfiguration.read();
 
     public CleanroomRelauncher() { }
 
@@ -143,16 +140,8 @@ public class CleanroomRelauncher {
         }
     }
 
-    private static RelauncherGUI showGUI(
-            List<CleanroomRelease> releases,
-            CleanroomRelease selected,
-            String javaPath,
-            String javaArgs,
-            JavaVersion javaTarget,
-            JavaDistro javaVendor,
-            boolean autoSetup,
-            boolean updateNotification) {
-
+    private static RelauncherGUI showGUI(List<CleanroomRelease> releases, CleanroomRelease selected, String javaPath,
+            String javaArgs, JavaVersion javaTarget, JavaDistro javaVendor, boolean autoSetup, boolean updateNotification) {
         return RelauncherGUI.show(releases, $ -> {
             $.selected           = selected;
             $.javaPath           = javaPath;
@@ -165,14 +154,16 @@ public class CleanroomRelauncher {
     }
 
     public static void clearFolders() {
-        if (CONFIG.getClearCleanroomFolderEnabled()) {
-            deleteFolder(CLEANROOM_BASE.resolve("relauncher"));
-            CONFIG.setClearCleanroomFolder(false);
-
-        }
-        if (CONFIG.getClearJavaProvisionFolderEnabled()) {
-            deleteFolder(CLEANROOM_BASE.resolve("java"));
-            CONFIG.setClearJavaProvisionFolder(false);
+        if (CONFIG.getClearCleanroomFolderEnabled() || CONFIG.getClearJavaProvisionFolderEnabled()) {
+            if (CONFIG.getClearCleanroomFolderEnabled()) {
+                deleteFolder(CACHE_DIR);
+                CONFIG.setClearCleanroomFolder(false);
+            }
+            if (CONFIG.getClearJavaProvisionFolderEnabled()) {
+                deleteFolder(JAVA_PROVISION_DIR);
+                CONFIG.setClearJavaProvisionFolder(false);
+            }
+            CONFIG.save();
         }
     }
 
