@@ -99,17 +99,7 @@ public abstract class RelauncherFrame extends JFrame {
      */
     private String buildJavaArgs(Integer majorVersion) {
         String custom = RelauncherUI.unmanagedArguments(javaArgs);
-        StringBuilder argBuilder = new StringBuilder();
-        if (majorVersion != null && majorVersion < 25) {
-            argBuilder.append(ArgsEnum.UnlockExperimentalOptions.getArg()).append(" ");
-        }
-        for (ArgsEnum arg : args) {
-            if (arg == ArgsEnum.CompactObjectHeaders && (majorVersion == null || majorVersion >= 24)) {
-                argBuilder.append(arg.getArg()).append(" ");
-            } else if (arg == ArgsEnum.ZGC) {
-                argBuilder.append(arg.getArg()).append(" ");
-            }
-        }
+        StringBuilder argBuilder = new StringBuilder(ArgsEnum.render(args, majorVersion));
         if (!custom.isEmpty()) {
             argBuilder.append(custom).append(" ");
         }
@@ -522,8 +512,8 @@ public abstract class RelauncherFrame extends JFrame {
         // and what gets saved, and the two disagree whenever the in-memory config has unsaved edits
         boolean javaArgsSupplied = javaArgs != null && !javaArgs.trim().isEmpty();
         for (ArgsEnum arg : ArgsEnum.values()) {
-            if (arg == ArgsEnum.UnlockExperimentalOptions) {
-                continue; // Driven by the target Java version, not by the user
+            if (!arg.isUserSelectable()) {
+                continue; // Implicit, driven by the target Java version rather than by the user
             }
             JCheckBox checkBox = new JCheckBox(RelauncherUI.argumentLabel(arg));
             checkBox.setToolTipText(RelauncherUI.argumentTooltip(arg));

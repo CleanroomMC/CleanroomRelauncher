@@ -308,12 +308,7 @@ public class CleanroomRelauncher {
                     CONFIG.setTargetVendor(javaVendor);
                 }
                 if (javaArgs == null || javaArgs.isEmpty()) {
-                    StringBuilder argBuilder = new StringBuilder();
-                    if (javaTarget.major() < 25) {
-                        argBuilder.append(ArgsEnum.UnlockExperimentalOptions.getArg()).append(" ");
-                    }
-                    argBuilder.append(ArgsEnum.CompactObjectHeaders.getArg()).append(" ");
-                    javaArgs = argBuilder.toString();
+                    javaArgs = ArgsEnum.render(ArgsEnum.defaults(), javaTarget.major());
                 }
                 CONFIG.setJavaArguments(javaArgs);
                 if (selected == null) {
