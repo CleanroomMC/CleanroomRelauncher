@@ -12,15 +12,12 @@ import com.cleanroommc.relauncher.gui.LoadingGUI;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
 
 public class JavaProvisioning {
-    private static final Path javaHomeBase = Paths.get(System.getProperty("user.home"), ".cleanroom", "java");
 
     public static String validateOrProvisionJava(String path, JavaVersion target, JavaDistro vendor) {
         LoadingGUI loading = new LoadingGUI();
@@ -33,32 +30,32 @@ public class JavaProvisioning {
                 .orElseGet(FoojayJavaProvisioner::new);
 
         if (path != null && !path.isEmpty()) {
-            try{
+            try {
                 loading.updateStatus("Checking provided path...");
                 CleanroomRelauncher.LOGGER.info("Checking path: {}", path);
-                if(testJava(path, vendor, target)){
+                if (testJava(path, vendor, target)) {
                     return path;
                 }
                 CleanroomRelauncher.LOGGER.warn("Invalid path, Fetching a new java instance");
                 loading.updateStatus("Scanning for Java " + provisioningTarget.major() + " Installations ...");
                 String binaryPath = getBinaryPath(provisioningTarget, provisioningVendor, loading);
-                if(binaryPath != null){
+                if (binaryPath != null) {
                     return binaryPath;
                 }
                 loading.updateStatus("No Java found. Downloading...");
-                CleanroomRelauncher.LOGGER.warn("Found no available Java installation, Auto-provisioning..");
+                CleanroomRelauncher.LOGGER.warn("Found no available Java installation, Auto-provisioning...");
                 return autoProvisionJavaInstall(provisioningTarget, provisioningVendor, loading, provisioner);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             } finally {
                 loading.close();
             }
-        } else{
+        } else {
             try {
                 loading.updateStatus("Scanning for Java " + provisioningTarget.major() + " Installations ...");
 
                 String binaryPath = getBinaryPath(provisioningTarget, provisioningVendor, loading);
-                if(binaryPath != null){
+                if (binaryPath != null) {
                     return binaryPath;
                 }
                 loading.close();
@@ -71,10 +68,10 @@ public class JavaProvisioning {
             }
         }
     }
+
     private static @Nullable String getBinaryPath(JavaVersion target, JavaDistro vendor, LoadingGUI loading) throws IOException {
         List<JavaLocator> locators = JavaLocator.locators();
-        locators.forEach(l -> l.onScan(directory ->
-                loading.updateStatus("Scanning for Java in " + directory + "...")));
+        locators.forEach(l -> l.onScan(directory -> loading.updateStatus("Scanning for Java in " + directory + "...")));
 
         List<JavaInstall> validJavaInstalls = locators.parallelStream()
                 .map(JavaLocator::all)
@@ -98,7 +95,8 @@ public class JavaProvisioning {
         }
         return null;
     }
-    private static boolean testJava(String javaPath){
+
+    private static boolean testJava(String javaPath) {
         //TODO
         try{
             JavaInstall javaInstall = JavaUtils.parseInstall(javaPath);
@@ -108,8 +106,9 @@ public class JavaProvisioning {
             return false;
         }
     }
+
     private static boolean testJava(String javaPath, JavaDistro vendor, JavaVersion target) {
-        try{
+        try {
             JavaInstall javaInstall = JavaUtils.parseInstall(javaPath);
             boolean validVersion = target == null ? javaInstall.version().major() >= 21 : javaInstall.version().major() == target.major();
             boolean validVendor = matchesVendor(javaInstall.distro(), vendor);
@@ -152,11 +151,12 @@ public class JavaProvisioning {
                     loading.updateStatus("Downloading " + fileName + " - " + (downloaded / 1024) + " KB");
                 }
             });
-            JavaInstall result = provisioner.resolve(target, vendor, javaHomeBase);
+            JavaInstall result = provisioner.resolve(target, vendor, CleanroomRelauncher.JAVA_PROVISION_DIR);
             return result.executable(true).toAbsolutePath().toString();
         } catch (IOException e) {
             CleanroomRelauncher.LOGGER.error("Unable to provision a java installation", e);
         }
         return "";
     }
+
 }
