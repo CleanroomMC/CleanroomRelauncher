@@ -32,42 +32,31 @@ if (propertyBool('publish_to_maven')) {
     }
 }
 
-// Documentation here: https://github.com/matthewprenger/CurseGradle/wiki/
+// Documentation here: https://github.com/Darkhax/CurseForgeGradle
 if (propertyBool('publish_to_curseforge')) {
-    apply plugin: 'com.matthewprenger.cursegradle'
     assertProperty('curseforge_project_id')
     assertProperty('release_type')
     setDefaultProperty('curseforge_debug', false, false)
-    curseforge {
-        apiKey = System.getenv('CURSEFORGE_TOKEN') == null ? "" : System.getenv('CURSEFORGE_TOKEN')
-        // noinspection GroovyAssignabilityCheck
-        project {
-            id = propertyString('curseforge_project_id')
-            addGameVersion 'Java 8'
-            addGameVersion 'Forge'
-            addGameVersion '1.12.2'
-            addGameVersion 'Client'
-            releaseType = propertyString('release_type')
-            if (propertyBool('publish_with_changelog')) {
-                changelog = parserChangelog()
-                changelogType = 'markdown'
-            }
-            mainArtifact tasks.reobfJar, {
-                displayName = "${propertyString('mod_name')} ${propertyString('mod_version')}"
-                if (propertyBool('use_mixins')) {
-                    relations {
-                        requiredDependency 'mixin-booter'
-                    }
-                }
-                if (propertyBool('use_asset_mover')) {
-                    relations {
-                        requiredDependency 'assetmover'
-                    }
-                }
-            }
-            options {
-                debug = propertyBool('curseforge_debug')
-            }
+    tasks.named('curseforge') {
+        apiToken = System.getenv('CURSEFORGE_TOKEN') == null ? "" : System.getenv('CURSEFORGE_TOKEN')
+        debugMode = propertyBool('curseforge_debug')
+        dependsOn tasks.reobfJar
+        def mainFile = upload(propertyString('curseforge_project_id'), tasks.reobfJar)
+        mainFile.displayName = "${propertyString('mod_name')} ${propertyString('mod_version')}"
+        mainFile.releaseType = propertyString('release_type')
+        mainFile.addJavaVersion 'Java 8'
+        mainFile.addModLoader 'Forge'
+        mainFile.addGameVersion '1.12.2'
+        mainFile.addEnvironment 'Client'
+        if (propertyBool('publish_with_changelog')) {
+            mainFile.changelog = parserChangelog()
+            mainFile.changelogType = 'markdown'
+        }
+        if (propertyBool('use_mixins')) {
+            mainFile.addRequirement 'mixin-booter'
+        }
+        if (propertyBool('use_asset_mover')) {
+            mainFile.addRequirement 'assetmover'
         }
     }
 }
