@@ -46,6 +46,7 @@ if (propertyBool('publish_to_curseforge')) {
             addGameVersion 'Java 8'
             addGameVersion 'Forge'
             addGameVersion '1.12.2'
+            addGameVersion 'Client'
             releaseType = propertyString('release_type')
             if (propertyBool('publish_with_changelog')) {
                 changelog = parserChangelog()
