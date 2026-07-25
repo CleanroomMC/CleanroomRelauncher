@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0] - 2026-07-25
+
+### Added
+- Dark Theme
+
+### Changed
+- Menu, to be "modern" with inclusion of rounded corners, pill buttons
+- More readable and softer font selection
+- Better scaling
+- Removed duplicate UI code
+
+### Fixed
+- Arguments list not responding properly if checkboxes are ticked/unticked
+- Errors not handled properly pertaining reading of configuration
+- Taskbar window previews not working
+
 ## [0.6.3] - 2026-07-14
 
 ### Fixed
