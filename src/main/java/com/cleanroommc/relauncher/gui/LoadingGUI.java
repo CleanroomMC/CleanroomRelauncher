@@ -2,6 +2,8 @@ package com.cleanroommc.relauncher.gui;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
 
 public class LoadingGUI {
@@ -18,10 +20,14 @@ public class LoadingGUI {
 
     public LoadingGUI() {
         RelauncherUI.install();
+        Rectangle screenBounds = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration().getBounds();
+        float scale = RelauncherUI.uiScaleFor(screenBounds);
+        RelauncherUI.setUiScale(scale);
+
         frame = new JFrame("Cleanroom Relauncher");
         frame.setUndecorated(true);
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        frame.setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+        frame.setSize(Math.round(WINDOW_WIDTH * scale), Math.round(WINDOW_HEIGHT * scale));
         frame.setLayout(new BorderLayout());
         frame.setBackground(new Color(0, 0, 0, 0));
 
@@ -53,6 +59,10 @@ public class LoadingGUI {
         progressContent.setLayout(new BoxLayout(progressContent, BoxLayout.Y_AXIS));
         progressContent.setBorder(BorderFactory.createEmptyBorder(8, 4, 0, 4));
 
+        // Glue above and below balances the block in whatever height is left under the header,
+        // instead of stacking it at the top with all the slack below.
+        progressContent.add(Box.createVerticalGlue());
+
         statusLabel = new JLabel("Initializing…");
         statusLabel.setFont(statusLabel.getFont().deriveFont(14f));
         statusLabel.setForeground(RelauncherUI.TEXT);
@@ -82,13 +92,49 @@ public class LoadingGUI {
         progressRow.add(percentLabel, BorderLayout.EAST);
 
         progressContent.add(progressRow);
+        progressContent.add(Box.createVerticalGlue());
         panel.add(progressContent, BorderLayout.CENTER);
 
         frame.add(panel, BorderLayout.CENTER);
+        RelauncherUI.scaleComponent(panel, scale);
         RelauncherUI.styleTree(panel);
         panel.setOpaque(false);
+        installDragToMove(panel);
         frame.setLocationRelativeTo(null);
         applyRoundedShape();
+    }
+
+    /**
+     * Undecorated windows have no title bar to grab. Without this the progress window cannot be
+     * moved out of the way while a long download runs.
+     */
+    private void installDragToMove(JComponent grip) {
+        MouseAdapter dragger = new MouseAdapter() {
+
+            private Point grabOffset;
+
+            @Override
+            public void mousePressed(MouseEvent event) {
+                grabOffset = event.getPoint();
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent event) {
+                grabOffset = null;
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent event) {
+                if (grabOffset == null) {
+                    return;
+                }
+                Point onScreen = event.getLocationOnScreen();
+                frame.setLocation(onScreen.x - grabOffset.x, onScreen.y - grabOffset.y);
+            }
+        };
+        grip.addMouseListener(dragger);
+        grip.addMouseMotionListener(dragger);
+        grip.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
     }
 
     private void applyRoundedShape() {
@@ -131,7 +177,7 @@ public class LoadingGUI {
             progressBar.setValue(safePercent);
             percentLabel.setText(safePercent + "%");
             percentLabel.setVisible(true);
-            if (safePercent >= 100) {
+            if (safePercent == 100) {
                 detailLabel.setText("Finishing up…");
             }
         });

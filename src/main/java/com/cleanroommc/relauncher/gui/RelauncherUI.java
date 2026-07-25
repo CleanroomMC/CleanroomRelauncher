@@ -22,18 +22,24 @@ import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
 import java.io.File;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
-/** Shared visual language for the standalone relauncher windows. */
+/** Shared visual language for our windows. */
 final class RelauncherUI {
 
     private static boolean darkTheme;
+    private static float uiScale = 1f;
 
     static final Color PRIMARY = new Color(32, 184, 176);
+
+    /**
+     * Widest a settings card is allowed to get. BoxLayout centres anything narrower than the
+     * column, so this keeps a maximized window from stretching cards edge to edge.
+     */
+    private static final int MAX_CONTENT_WIDTH = 720;
 
     static Color BACKGROUND, SURFACE, CONTROL, CONTROL_HOVER, TEXT, MUTED_TEXT, PRIMARY_HOVER, BORDER, FOCUS,
             SUCCESS, ERROR, DISABLED_TEXT;
@@ -160,9 +166,6 @@ final class RelauncherUI {
     }
 
     private static Color[] paletteSnapshot() {
-        Field[] colors = RelauncherUI.class.getDeclaredFields();
-
-
         return new Color[] {
                 BACKGROUND, SURFACE, CONTROL, CONTROL_HOVER, TEXT, MUTED_TEXT,
                 PRIMARY_HOVER, BORDER, FOCUS, SUCCESS, ERROR, DISABLED_TEXT
@@ -299,7 +302,7 @@ final class RelauncherUI {
     }
 
     static void install() {
-        // LCD/ClearType on Windows — much sharper than greyscale AA for UI copy
+        // LCD/ClearType on Windows
         System.setProperty("awt.useSystemAAFontSettings", "lcd");
         System.setProperty("swing.aatext", "true");
         try {
@@ -388,10 +391,30 @@ final class RelauncherUI {
     }
 
     private static void showMessage(Component parent, String title, String message, boolean error) {
+        // Panel.background has to be SURFACE for the duration of the dialog only
+        // Leaving it set would hand the wrong background to every panel created afterwards
+        Object previousPanelBackground = UIManager.get("Panel.background");
         UIManager.put("OptionPane.background", SURFACE);
         UIManager.put("Panel.background", SURFACE);
         UIManager.put("OptionPane.messageForeground", TEXT);
-        JOptionPane.showMessageDialog(parent, message, title, error ? JOptionPane.ERROR_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
+        try {
+            JOptionPane.showMessageDialog(parent, wrapMessage(message), title,
+                    error ? JOptionPane.ERROR_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
+        } finally {
+            UIManager.put("Panel.background", previousPanelBackground);
+        }
+    }
+
+    /** Long single-line messages (stack trace text, paths) otherwise stretch the dialog off-screen. */
+    private static String wrapMessage(String message) {
+        if (message == null || message.length() < 90) {
+            return message;
+        }
+        return "<html><body style='width: 380px'>" + escapeHtml(message) + "</body></html>";
+    }
+
+    private static String escapeHtml(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /**
@@ -408,6 +431,25 @@ final class RelauncherUI {
                 action.run();
             }
         });
+    }
+
+    /**
+     * Records the display scale so fixed control sizes grow with the fonts.
+     * Call before building a window: {@link #styleTree} and the control factories read it while
+     * laying out, and scaled-up fonts inside fixed-height fields clip otherwise.
+     */
+    static void setUiScale(float scale) {
+        uiScale = scale;
+    }
+
+    /** Computes the display scale used for a window on the given screen. */
+    static float uiScaleFor(Rectangle screenBounds) {
+        return Math.max(0.9f, Math.min(1.25f, screenBounds.width / 1920f));
+    }
+
+    /** Scales a fixed control dimension by the active UI scale. */
+    static int scaled(int base) {
+        return Math.round(base * uiScale);
     }
 
     static void scaleComponent(Component component, float scale) {
@@ -435,7 +477,7 @@ final class RelauncherUI {
                 component instanceof JComboBox) {
             Font font = component.getFont();
             if (font != null) {
-                // Round to whole pixels so scaled text stays crisp.
+                // Round to whole pixels so scaled text stays crisp
                 float scaled = Math.max(11f, Math.round(font.getSize2D() * scale));
                 component.setFont(font.deriveFont(scaled));
             }
@@ -580,6 +622,33 @@ final class RelauncherUI {
         return argument.getDescription();
     }
 
+    /**
+     * Everything in {@code arguments} that is not one of the checkbox-managed flags.
+     * Allows handwritten flags to survive a checkbox toggle instead of being wiped by the regenerated argument string.
+     */
+    static String unmanagedArguments(String arguments) {
+        if (arguments == null || arguments.trim().isEmpty()) {
+            return "";
+        }
+        StringBuilder kept = new StringBuilder();
+        for (String token : arguments.trim().split("\\s+")) {
+            boolean managed = false;
+            for (ArgsEnum argument : ArgsEnum.values()) {
+                if (argument.getArg().equals(token)) {
+                    managed = true;
+                    break;
+                }
+            }
+            if (!managed) {
+                if (kept.length() > 0) {
+                    kept.append(' ');
+                }
+                kept.append(token);
+            }
+        }
+        return kept.toString();
+    }
+
     static String argumentTooltip(ArgsEnum argument) {
         String description = argumentDescription(argument);
         if (description.isEmpty()) {
@@ -719,11 +788,13 @@ final class RelauncherUI {
                                              Consumer<Boolean> onSelection) {
         final SegmentedShell shell = new SegmentedShell();
         shell.setLayout(new GridLayout(1, 2, 0, 0));
-        shell.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-        Dimension shellSize = new Dimension(Integer.MAX_VALUE, 48);
-        shell.setPreferredSize(new Dimension(280, 48));
-        shell.setMinimumSize(new Dimension(160, 48));
-        shell.setMaximumSize(shellSize);
+        shell.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
+        // Max == preferred: a two-option toggle reads as a control, not as a full-width banner
+        int shellHeight = scaled(36);
+        int shellWidth = scaled(260);
+        shell.setPreferredSize(new Dimension(shellWidth, shellHeight));
+        shell.setMinimumSize(new Dimension(scaled(160), shellHeight));
+        shell.setMaximumSize(new Dimension(shellWidth, shellHeight));
 
         final JToggleButton left = new JToggleButton(leftLabel);
         final JToggleButton right = new JToggleButton(rightLabel);
@@ -753,10 +824,31 @@ final class RelauncherUI {
         left.addChangeListener(repaintShell);
         right.addChangeListener(repaintShell);
 
+        // Native segmented controls move with arrow keys, Tab alone would skip past the whole group
+        installArrowNavigation(left, right);
+        installArrowNavigation(right, left);
+
         shell.bind(left, right);
         shell.add(left);
         shell.add(right);
         return new SegmentedControl(shell, left, right, onSelection);
+    }
+
+    /** Left/Right/Up/Down on {@code from} selects and focuses {@code to}. */
+    private static void installArrowNavigation(final JToggleButton from, final JToggleButton to) {
+        String key = "relauncher.segment.move";
+        InputMap inputMap = from.getInputMap(JComponent.WHEN_FOCUSED);
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), key);
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), key);
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), key);
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), key);
+        from.getActionMap().put(key, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                to.requestFocusInWindow();
+                to.doClick();
+            }
+        });
     }
 
     private static void prepareSegmentButton(JToggleButton button, String side) {
@@ -767,9 +859,9 @@ final class RelauncherUI {
         button.setFocusPainted(false);
         button.setRolloverEnabled(true);
         button.setBorder(BorderFactory.createEmptyBorder());
-        button.setMargin(new Insets(8, 14, 8, 14));
+        button.setMargin(new Insets(6, 12, 6, 12));
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        Dimension segmentSize = new Dimension(120, 40);
+        Dimension segmentSize = new Dimension(scaled(120), scaled(30));
         button.setPreferredSize(segmentSize);
         button.setMinimumSize(segmentSize);
     }
@@ -781,8 +873,8 @@ final class RelauncherUI {
         bar.setStringPainted(false);
         bar.setForeground(PRIMARY);
         bar.setBackground(CONTROL);
-        bar.setPreferredSize(new Dimension(480, 12));
-        bar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 12));
+        bar.setPreferredSize(new Dimension(scaled(480), scaled(12)));
+        bar.setMaximumSize(new Dimension(Integer.MAX_VALUE, scaled(12)));
         bar.setUI(new ModernProgressBarUI());
         return bar;
     }
@@ -817,7 +909,7 @@ final class RelauncherUI {
         header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
         header.setBorder(BorderFactory.createEmptyBorder(0, 4, 18, 4));
         header.setAlignmentX(Component.CENTER_ALIGNMENT);
-        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        header.setMaximumSize(new Dimension(scaled(MAX_CONTENT_WIDTH), Integer.MAX_VALUE));
 
         JLabel logo = new JLabel(new ImageIcon(image.getScaledInstance(56, 56, Image.SCALE_SMOOTH)));
         logo.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -842,7 +934,8 @@ final class RelauncherUI {
         JPanel card = new SurfacePanel(new BorderLayout(0, 12));
         card.setBorder(BorderFactory.createEmptyBorder(18, 20, 18, 20));
         card.setAlignmentX(Component.CENTER_ALIGNMENT);
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        // Capped and centre-aligned, so widening the window adds margin rather than card width
+        card.setMaximumSize(new Dimension(scaled(MAX_CONTENT_WIDTH), Integer.MAX_VALUE));
 
         JPanel copy = new JPanel();
         copy.setOpaque(false);
@@ -876,6 +969,15 @@ final class RelauncherUI {
 
     static JPanel scrollableColumn() {
         return new ScrollableColumn();
+    }
+
+    /**
+     * A {@link CardLayout} host that measures the card currently showing.
+     * Plain CardLayout reserves the tallest card's height at all times, which leaves the shorter
+     * card sitting above a block of dead space.
+     */
+    static JPanel cardStack(CardLayout layout) {
+        return new CardStack(layout);
     }
 
     static JPanel footer() {
@@ -930,18 +1032,19 @@ final class RelauncherUI {
             button.setFocusPainted(false);
             button.setRolloverEnabled(true);
             // Strip L&F chrome so we never get a second border/pill under
-            button.setBorder(BorderFactory.createEmptyBorder());
             button.setBorderPainted(false);
             button.setContentAreaFilled(false);
             button.setOpaque(false);
+            // Padding has to live in the border, not the margin: an empty border contributes zero
+            // insets, and BasicButtonUI sizes from the border, so margin alone paints text-tight pills.
             if (segmented) {
-                button.setMargin(new Insets(8, 14, 8, 14));
+                setButtonPadding(button, new Insets(6, 12, 6, 12));
             } else {
                 boolean compact = Boolean.TRUE.equals(button.getClientProperty(COMPACT_BUTTON));
-                button.setMargin(compact ? new Insets(5, 12, 5, 12) : new Insets(8, 16, 8, 16));
+                setButtonPadding(button, compact ? new Insets(5, 12, 5, 12) : new Insets(8, 16, 8, 16));
                 if (compact) {
                     Dimension preferred = button.getPreferredSize();
-                    button.setPreferredSize(new Dimension(preferred.width, 34));
+                    button.setPreferredSize(new Dimension(preferred.width, scaled(34)));
                 }
             }
         } else if (component instanceof JTextField) {
@@ -952,8 +1055,9 @@ final class RelauncherUI {
             text.setCaretColor(PRIMARY);
             text.setMargin(new Insets(7, 10, 7, 10));
             text.setBorder(textFieldBorder(text.hasFocus() ? FOCUS : BORDER));
-            text.setPreferredSize(new Dimension(text.getPreferredSize().width, 34));
-            text.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+            int fieldHeight = scaled(34);
+            text.setPreferredSize(new Dimension(text.getPreferredSize().width, fieldHeight));
+            text.setMaximumSize(new Dimension(Integer.MAX_VALUE, fieldHeight));
         } else if (component instanceof JComboBox) {
             JComboBox<?> comboBox = (JComboBox<?>) component;
             comboBox.setUI(new DarkComboBoxUI());
@@ -961,9 +1065,10 @@ final class RelauncherUI {
             comboBox.setBackground(CONTROL);
             comboBox.setForeground(TEXT);
             comboBox.setBorder(new RoundedBorder(BORDER, 8));
-            comboBox.setPreferredSize(new Dimension(comboBox.getPreferredSize().width, 36));
-            comboBox.setMinimumSize(new Dimension(80, 36));
-            comboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+            int comboHeight = scaled(36);
+            comboBox.setPreferredSize(new Dimension(comboBox.getPreferredSize().width, comboHeight));
+            comboBox.setMinimumSize(new Dimension(scaled(80), comboHeight));
+            comboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, comboHeight));
             installDarkRenderer(comboBox);
         } else if (component instanceof JScrollBar) {
             JScrollBar scrollBar = (JScrollBar) component;
@@ -1005,6 +1110,14 @@ final class RelauncherUI {
                 styleTree(child);
             }
         }
+    }
+
+    /** Scales the padding with the UI and keeps margin/border in agreement. */
+    private static void setButtonPadding(AbstractButton button, Insets padding) {
+        Insets scaled = new Insets(scaled(padding.top), scaled(padding.left),
+                scaled(padding.bottom), scaled(padding.right));
+        button.setMargin(scaled);
+        button.setBorder(BorderFactory.createEmptyBorder(scaled.top, scaled.left, scaled.bottom, scaled.right));
     }
 
     static void installTextFieldFocus(JTextField text) {
@@ -1157,6 +1270,43 @@ final class RelauncherUI {
             g.dispose();
             super.paintComponent(graphics);
         }
+    }
+
+    private static final class CardStack extends JPanel {
+
+        private CardStack(CardLayout layout) {
+            super(layout);
+            setOpaque(false);
+        }
+
+        /** CardLayout hides every card but the active one, so visibility identifies it. */
+        private Component visibleCard() {
+            for (Component child : getComponents()) {
+                if (child.isVisible()) {
+                    return child;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            Component card = visibleCard();
+            if (card == null) {
+                return super.getPreferredSize();
+            }
+            Dimension size = card.getPreferredSize();
+            Insets insets = getInsets();
+            return new Dimension(size.width + insets.left + insets.right,
+                    size.height + insets.top + insets.bottom);
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            // CardLayout reports an unbounded maximum, which lets BoxLayout stretch the stack
+            return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+        }
+
     }
 
     private static final class ScrollableColumn extends JPanel implements Scrollable {
