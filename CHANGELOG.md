@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1] - 2026-07-27
+
+### Added
+- More robust way of checking for fonts to use
+
+### Fixed
+- Some instances where text isn't being rendered on the UI
+
 ## [1.0.0] - 2026-07-25
 
 ### Added

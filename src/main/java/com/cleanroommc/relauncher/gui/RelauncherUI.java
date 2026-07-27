@@ -1,5 +1,6 @@
 package com.cleanroommc.relauncher.gui;
 
+import com.cleanroommc.platformutils.Platform;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.util.enums.ArgsEnum;
 
@@ -21,6 +22,7 @@ import java.awt.font.TextAttribute;
 import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
@@ -48,6 +50,7 @@ final class RelauncherUI {
         setPalette(loadConfiguredDarkMode());
     }
 
+    private static final boolean WINDOWS = Platform.current().isWindows();
     private static final String PRIMARY_BUTTON = "relauncher.primaryButton";
     private static final String COMPACT_BUTTON = "relauncher.compactButton";
     private static final String GHOST_BUTTON = "relauncher.ghostButton";
@@ -67,22 +70,56 @@ final class RelauncherUI {
     private RelauncherUI() { }
 
     private static String resolveUiFamily() {
+        // Preference order, not an assumption about what is installed
         String[] candidates = {
-                "Segoe UI", "Inter", "SF Pro Text", "Helvetica Neue",
-                "Ubuntu", "Cantarell", "Noto Sans", Font.SANS_SERIF
+                "Segoe UI", // Windows
+                "SF Pro Text", "Helvetica Neue", "Lucida Grande", // Mac
+                "Inter", "Ubuntu", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Cantarell", // Linux
+                "Lucida Sans" // Java (Oracle)
         };
-        for (int i = 0; i < candidates.length; i++) {
-            Font probe = new Font(candidates[i], Font.PLAIN, 12);
-            if (isFontFamily(probe, candidates[i]) || i == candidates.length - 1) {
+        for (String candidate : candidates) {
+            Font probe = new Font(candidate, Font.PLAIN, 12);
+            if (isFontFamily(probe, candidate) && paintsGlyphs(probe)) {
                 return probe.getFamily();
             }
         }
+        // Last ditch
+        // SANS_SERIF is a logical family, every platform maps it onto something it considers its default
         return Font.SANS_SERIF;
     }
 
     private static boolean isFontFamily(Font font, String expected) {
         String family = font.getFamily();
         return family != null && family.equalsIgnoreCase(expected);
+    }
+
+    /**
+     * A family can resolve, report metrics and claim every character while rasterizing nothing.
+     * Draw with the face and look for ink.
+     */
+    private static boolean paintsGlyphs(Font font) {
+        int size = 24;
+        try {
+            BufferedImage canvas = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = canvas.createGraphics();
+            try {
+                g.setFont(font.deriveFont(Font.PLAIN, 16f));
+                g.setColor(Color.BLACK);
+                g.drawString("AB", 2, size - 6);
+            } finally {
+                g.dispose();
+            }
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) {
+                    if ((canvas.getRGB(x, y) >>> 24) != 0) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (LinkageError | RuntimeException ignored) {
+            return false;
+        }
     }
 
     /**
@@ -276,8 +313,7 @@ final class RelauncherUI {
         chooser.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
         chooser.setAlwaysOnTop(false);
         chooser.setMultipleMode(false);
-        chooser.setFilenameFilter((directory, name) ->
-                !System.getProperty("os.name", "").toLowerCase().contains("win") || name.toLowerCase().endsWith(".exe"));
+        chooser.setFilenameFilter((directory, name) -> !WINDOWS || name.toLowerCase().endsWith(".exe"));
 
         if (currentPath != null && !currentPath.trim().isEmpty()) {
             File currentFile = new File(currentPath.trim());
@@ -286,7 +322,7 @@ final class RelauncherUI {
                 chooser.setDirectory(parent.getAbsolutePath());
                 chooser.setFile(currentFile.getName());
             }
-        } else if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+        } else if (WINDOWS) {
             // Windows' native FileDialog ignores FilenameFilter, but understands wildcards.
             chooser.setFile("*.exe");
         }
