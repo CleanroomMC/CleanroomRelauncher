@@ -65,6 +65,7 @@ public abstract class RelauncherFrame extends JFrame {
         this.windowIcon = icon;
         this.setIconImage(icon);
         this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        this.setResizable(false);
         this.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {

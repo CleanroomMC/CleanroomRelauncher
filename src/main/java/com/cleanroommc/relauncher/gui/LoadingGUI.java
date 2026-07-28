@@ -26,6 +26,7 @@ public class LoadingGUI {
 
         frame = new JFrame("Cleanroom Relauncher");
         frame.setUndecorated(true);
+        frame.setResizable(false);
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         frame.setSize(Math.round(WINDOW_WIDTH * scale), Math.round(WINDOW_HEIGHT * scale));
         frame.setLayout(new BorderLayout());
