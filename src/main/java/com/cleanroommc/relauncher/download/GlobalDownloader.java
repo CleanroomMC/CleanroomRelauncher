@@ -48,6 +48,13 @@ public final class GlobalDownloader {
         }));
     }
 
+    public void clear() {
+        for (ForkJoinTask<?> download : this.downloads.values()) {
+            download.cancel(false);
+        }
+        this.downloads.clear();
+    }
+
     public void immediatelyFrom(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
         ForkJoinTask<?> task = this.from(source, destination, expectedHash, algo);
         try {
