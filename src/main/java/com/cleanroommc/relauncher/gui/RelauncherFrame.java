@@ -66,12 +66,6 @@ public abstract class RelauncherFrame extends JFrame {
         this.setIconImage(icon);
         this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         this.setResizable(false);
-        this.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                RelauncherFrame.this.requestFocusInWindow();
-            }
-        });
     }
 
     /** Hint shown after the user picks an executable, e.g. "Test it before saving." */
