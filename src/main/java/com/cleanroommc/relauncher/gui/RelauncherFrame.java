@@ -57,8 +57,8 @@ public abstract class RelauncherFrame extends JFrame {
     public JavaDistro vendorSelected;
     public String javaPath, javaArgs;
 
-    protected JComboBox<CleanroomRelease> cleanroomReleaseBox;
-    protected RelauncherUI.SegmentedControl javaModeControl;
+    JComboBox<CleanroomRelease> cleanroomReleaseBox;
+    RelauncherUI.SegmentedControl javaModeControl;
 
     protected RelauncherFrame(String title, Image icon) {
         super(title);
