@@ -1033,7 +1033,9 @@ final class RelauncherUI {
             JComponent swing = (JComponent) component;
             swing.putClientProperty(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
             swing.putClientProperty(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
-            LayeredToolTipSupport.install((JComponent) component);
+            if (swing.getToolTipText() != null) {
+                LayeredToolTipSupport.install(swing);
+            }
         }
 
         if (component instanceof JCheckBox) {
