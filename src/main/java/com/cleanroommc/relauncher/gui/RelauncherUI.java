@@ -10,19 +10,13 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeListener;
 import javax.swing.plaf.basic.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
-import java.awt.event.FocusAdapter;
-import java.awt.event.FocusEvent;
-import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.awt.font.TextAttribute;
 import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
+import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
@@ -782,6 +776,11 @@ final class RelauncherUI {
         return row;
     }
 
+    static void tooltip(JComponent component, String text) {
+        component.setToolTipText(text);
+        LayeredToolTipSupport.install(component);
+    }
+
     /** Handle for a two-option segmented control, {@link #panel} is the component to add. */
     static final class SegmentedControl {
 
@@ -1025,6 +1024,22 @@ final class RelauncherUI {
         return footer;
     }
 
+    private static void styleScrollBar(JScrollBar scrollBar, Color trackBackground) {
+        scrollBar.setBackground(trackBackground);
+        scrollBar.setUI(new DarkScrollBarUI());
+        scrollBar.setBackground(trackBackground);
+        scrollBar.setOpaque(true);
+        scrollBar.setBorder(null);
+
+        Dimension preferred = scrollBar.getPreferredSize();
+
+        if (scrollBar.getOrientation() == Adjustable.VERTICAL) {
+            scrollBar.setPreferredSize(new Dimension(scaled(10), preferred.height));
+        } else {
+            scrollBar.setPreferredSize(new Dimension(preferred.width, scaled(10)));
+        }
+    }
+
     static void styleTree(Component component) {
         if (component.getFont() == null) {
             component.setFont(BASE_FONT);
@@ -1034,6 +1049,9 @@ final class RelauncherUI {
             JComponent swing = (JComponent) component;
             swing.putClientProperty(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
             swing.putClientProperty(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+            if (swing.getToolTipText() != null) {
+                LayeredToolTipSupport.install(swing);
+            }
         }
 
         if (component instanceof JCheckBox) {
@@ -1096,23 +1114,19 @@ final class RelauncherUI {
             text.setMaximumSize(new Dimension(Integer.MAX_VALUE, fieldHeight));
         } else if (component instanceof JComboBox) {
             JComboBox<?> comboBox = (JComboBox<?>) component;
-            comboBox.setUI(new DarkComboBoxUI());
             comboBox.setOpaque(false);
             comboBox.setBackground(CONTROL);
             comboBox.setForeground(TEXT);
+            installDarkRenderer(comboBox);
+            comboBox.setUI(new DarkComboBoxUI());
             comboBox.setBorder(new RoundedBorder(BORDER, 8));
             int comboHeight = scaled(36);
             comboBox.setPreferredSize(new Dimension(comboBox.getPreferredSize().width, comboHeight));
             comboBox.setMinimumSize(new Dimension(scaled(80), comboHeight));
             comboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, comboHeight));
-            installDarkRenderer(comboBox);
         } else if (component instanceof JScrollBar) {
             JScrollBar scrollBar = (JScrollBar) component;
-            scrollBar.setUI(new DarkScrollBarUI());
-            scrollBar.setBackground(BACKGROUND);
-            if (scrollBar.getOrientation() == Adjustable.VERTICAL) {
-                scrollBar.setPreferredSize(new Dimension(10, scrollBar.getPreferredSize().height));
-            }
+            styleScrollBar(scrollBar, BACKGROUND);
         } else if (component instanceof JProgressBar) {
             JProgressBar progressBar = (JProgressBar) component;
             progressBar.setUI(new ModernProgressBarUI());
@@ -1510,7 +1524,7 @@ final class RelauncherUI {
 
         private void updateDescription() {
             String description = isSelected() ? "Dark mode. Switch to light mode." : "Light mode. Switch to dark mode.";
-            setToolTipText(description);
+            tooltip(this, description);
             getAccessibleContext().setAccessibleDescription(description);
         }
 
@@ -1614,7 +1628,610 @@ final class RelauncherUI {
 
     }
 
+    private static final class LayeredToolTipSupport extends MouseAdapter {
+
+        private static final String INSTALLED = "relauncher.layeredToolTipInstalled";
+        private static final LayeredToolTipSupport INSTANCE = new LayeredToolTipSupport();
+
+        private static final int CURSOR_OFFSET_X = 12;
+        private static final int CURSOR_OFFSET_Y = 20;
+        private static final int FLIPPED_OFFSET_Y = 8;
+
+        private final Timer showTimer;
+        private final Timer dismissTimer;
+
+        private JComponent owner;
+        private Point ownerPoint;
+        private String text;
+
+        private JToolTip tip;
+        private JLayeredPane layeredPane;
+        private Window ownerWindow;
+
+        private final WindowAdapter windowListener = new WindowAdapter() {
+            @Override
+            public void windowLostFocus(WindowEvent event) {
+                hide();
+            }
+
+            @Override
+            public void windowClosed(WindowEvent event) {
+                hide();
+            }
+        };
+
+        private LayeredToolTipSupport() {
+            showTimer = new Timer(750, event -> showNow());
+            showTimer.setRepeats(false);
+
+            dismissTimer = new Timer(4000, event -> hide());
+            dismissTimer.setRepeats(false);
+        }
+
+        static void install(JComponent component) {
+            ToolTipManager.sharedInstance().unregisterComponent(component);
+
+            if (Boolean.TRUE.equals(component.getClientProperty(INSTALLED))) {
+                return;
+            }
+
+            component.putClientProperty(INSTALLED, Boolean.TRUE);
+
+            component.addMouseListener(INSTANCE);
+            component.addMouseMotionListener(INSTANCE);
+            component.addMouseWheelListener(INSTANCE);
+        }
+
+        @Override
+        public void mouseEntered(MouseEvent event) {
+            updateTarget(event);
+        }
+
+        @Override
+        public void mouseMoved(MouseEvent event) {
+            updateTarget(event);
+        }
+
+        @Override
+        public void mouseExited(MouseEvent event) {
+            if (event.getSource() == owner) {
+                hide();
+            }
+        }
+
+        @Override
+        public void mousePressed(MouseEvent event) {
+            hide();
+        }
+
+        @Override
+        public void mouseDragged(MouseEvent event) {
+            hide();
+        }
+
+        @Override
+        public void mouseWheelMoved(MouseWheelEvent event) {
+            hide();
+        }
+
+        private void updateTarget(MouseEvent event) {
+            if (!(event.getSource() instanceof JComponent)) {
+                hide();
+                return;
+            }
+
+            JComponent nextOwner = (JComponent) event.getSource();
+
+            if (!nextOwner.isEnabled() || !nextOwner.isShowing()) {
+                hide();
+                return;
+            }
+
+            String nextText = nextOwner.getToolTipText(event);
+
+            if (nextText == null || nextText.isEmpty()) {
+                if (nextOwner == owner) {
+                    hide();
+                }
+                return;
+            }
+
+            Point nextPoint = event.getPoint();
+
+            if (tip != null && nextOwner == owner) {
+                ownerPoint = nextPoint;
+                text = nextText;
+
+                tip.setTipText(text);
+                positionTip();
+
+                dismissTimer.restart();
+                return;
+            }
+
+            if (nextOwner != owner) {
+                hide();
+            }
+
+            owner = nextOwner;
+            ownerPoint = nextPoint;
+            text = nextText;
+
+            showTimer.restart();
+        }
+
+        private void showNow() {
+            if (owner == null || ownerPoint == null || text == null || !owner.isShowing()) {
+                hide();
+                return;
+            }
+
+            JRootPane rootPane = SwingUtilities.getRootPane(owner);
+
+            if (rootPane == null) {
+                hide();
+                return;
+            }
+
+            removeTipComponent();
+
+            layeredPane = rootPane.getLayeredPane();
+
+            tip = owner.createToolTip();
+            tip.setTipText(text);
+
+            tip.putClientProperty(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
+            tip.putClientProperty(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+
+            layeredPane.add(tip, Integer.valueOf(JLayeredPane.POPUP_LAYER + 1));
+
+            positionTip();
+
+            tip.setVisible(true);
+            tip.revalidate();
+            tip.repaint();
+
+            ownerWindow = SwingUtilities.getWindowAncestor(owner);
+
+            if (ownerWindow != null) {
+                ownerWindow.addWindowFocusListener(windowListener);
+            }
+
+            dismissTimer.restart();
+        }
+
+        private void positionTip() {
+            if (tip == null || layeredPane == null || owner == null || ownerPoint == null) {
+                return;
+            }
+
+            Point cursor = SwingUtilities.convertPoint(owner, ownerPoint, layeredPane);
+
+            Dimension size = tip.getPreferredSize();
+
+            int x = cursor.x + CURSOR_OFFSET_X;
+            int y = cursor.y + CURSOR_OFFSET_Y;
+
+            if (y + size.height > layeredPane.getHeight()) {
+                y = cursor.y - size.height - FLIPPED_OFFSET_Y;
+            }
+
+            int maxX = Math.max(0, layeredPane.getWidth() - size.width);
+            int maxY = Math.max(0, layeredPane.getHeight() - size.height);
+
+            x = Math.max(0, Math.min(x, maxX));
+            y = Math.max(0, Math.min(y, maxY));
+
+            tip.setBounds(
+                    x,
+                    y,
+                    size.width,
+                    size.height
+            );
+        }
+
+        private void hide() {
+            showTimer.stop();
+            dismissTimer.stop();
+
+            removeTipComponent();
+
+            owner = null;
+            ownerPoint = null;
+            text = null;
+        }
+
+        private void removeTipComponent() {
+            if (ownerWindow != null) {
+                ownerWindow.removeWindowFocusListener(windowListener);
+                ownerWindow = null;
+            }
+
+            if (tip != null) {
+                Container parent = tip.getParent();
+                if (parent != null) {
+                    Rectangle dirty = tip.getBounds();
+
+                    parent.remove(tip);
+                    parent.revalidate();
+                    parent.repaint(
+                            dirty.x,
+                            dirty.y,
+                            dirty.width,
+                            dirty.height
+                    );
+                }
+
+                tip = null;
+            }
+
+            layeredPane = null;
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static final class LayeredComboPopup implements ComboPopup {
+
+        private final JComboBox comboBox;
+        private final JList list;
+        private final JScrollPane scroller;
+        private final JScrollBar verticalScrollBar;
+        private final JPanel popupPanel;
+
+        private final MouseListener invocationMouseListener;
+        private final KeyListener keyListener;
+        private final AWTEventListener outsideMouseListener;
+        private final WindowFocusListener windowFocusListener;
+        private final PropertyChangeListener propertyChangeListener;
+
+        private JLayeredPane layeredPane;
+        private Window ownerWindow;
+
+        private boolean armed;
+        private boolean hooksInstalled;
+
+        private LayeredComboPopup(JComboBox comboBox) {
+            this.comboBox = comboBox;
+
+            list = new JList(comboBox.getModel());
+            list.setCellRenderer(comboBox.getRenderer());
+            list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            list.setFocusable(false);
+
+            list.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseReleased(MouseEvent event) {
+                    if (!SwingUtilities.isLeftMouseButton(event)) {
+                        return;
+                    }
+
+                    int index = list.locationToIndex(event.getPoint());
+                    if (index < 0) {
+                        return;
+                    }
+
+                    Rectangle cell = list.getCellBounds(index, index);
+                    if (cell == null || !cell.contains(event.getPoint())) {
+                        return;
+                    }
+
+                    comboBox.setSelectedIndex(index);
+                    hide();
+
+                    event.consume();
+                }
+            });
+
+            scroller = new JScrollPane(
+                    list,
+                    ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                    ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+
+            scroller.setFocusable(false);
+            scroller.setWheelScrollingEnabled(true);
+            scroller.addMouseWheelListener(InputEvent::consume);
+
+            verticalScrollBar = scroller.getVerticalScrollBar();
+            verticalScrollBar.setUnitIncrement(scaled(10));
+
+            popupPanel = new JPanel(new BorderLayout());
+            popupPanel.setOpaque(true);
+            popupPanel.setBackground(comboBox.getBackground());
+            popupPanel.setBorder(BorderFactory.createCompoundBorder(new RoundedBorder(BORDER, 8),
+                    BorderFactory.createEmptyBorder(1, 1, 1, 1)));
+            popupPanel.putClientProperty(KEEP_OPAQUE, Boolean.TRUE);
+            popupPanel.add(scroller, BorderLayout.CENTER);
+
+            applyTheme();
+
+            invocationMouseListener = new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent event) {
+                    Component source = (Component) event.getSource();
+                    armed = SwingUtilities.isLeftMouseButton(event) && comboBox.isEnabled() && source.contains(event.getPoint());
+                    if (armed && comboBox.isRequestFocusEnabled()) {
+                        comboBox.requestFocusInWindow();
+                    }
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent event) {
+                    Component source = (Component) event.getSource();
+                    boolean shouldToggle = armed && source.contains(event.getPoint());
+                    armed = false;
+                    if (!shouldToggle) {
+                        return;
+                    }
+
+                    event.consume();
+
+                    SwingUtilities.invokeLater(() -> {
+                        if (!comboBox.isShowing() || !comboBox.isEnabled()) {
+                            return;
+                        }
+                        if (isVisible()) {
+                            hide();
+                        } else {
+                            show();
+                        }
+                    });
+                }
+            };
+
+            keyListener = new KeyAdapter() {
+                @Override
+                public void keyPressed(KeyEvent event) {
+                    if (event.getKeyCode() == KeyEvent.VK_ESCAPE && isVisible()) {
+                        hide();
+                        event.consume();
+                    }
+                }
+            };
+
+            outsideMouseListener = awtEvent -> {
+                if (!isVisible() || !(awtEvent instanceof MouseEvent)) {
+                    return;
+                }
+
+                MouseEvent event = (MouseEvent) awtEvent;
+                if (event.getID() != MouseEvent.MOUSE_PRESSED) {
+                    return;
+                }
+
+                Component source = (Component) event.getSource();
+                if (inside(source, popupPanel) || inside(source, comboBox)) {
+                    return;
+                }
+
+                hide();
+            };
+
+            windowFocusListener = new WindowAdapter() {
+                @Override
+                public void windowLostFocus(WindowEvent event) {
+                    hide();
+                }
+            };
+
+            propertyChangeListener = event -> {
+                String name = event.getPropertyName();
+                if ("model".equals(name)) {
+                    list.setModel((ListModel) event.getNewValue());
+                } else if ("renderer".equals(name)) {
+                    list.setCellRenderer((ListCellRenderer) event.getNewValue());
+                } else if ("font".equals(name)) {
+                    list.setFont((Font) event.getNewValue());
+                } else if ("enabled".equals(name) && !comboBox.isEnabled()) {
+                    hide();
+                }
+            };
+
+            comboBox.addPropertyChangeListener(propertyChangeListener);
+        }
+
+        private void applyTheme() {
+            list.setOpaque(true);
+            list.setBackground(CONTROL);
+            list.setForeground(TEXT);
+            list.setSelectionBackground(PRIMARY);
+            list.setSelectionForeground(Color.WHITE);
+
+            scroller.setOpaque(true);
+            scroller.setBackground(CONTROL);
+            scroller.setBorder(null);
+
+            JViewport viewport = scroller.getViewport();
+            viewport.setOpaque(true);
+            viewport.setBackground(CONTROL);
+
+            styleScrollBar(verticalScrollBar, CONTROL);
+            verticalScrollBar.setUnitIncrement(scaled(10));
+
+            popupPanel.setOpaque(true);
+            popupPanel.setBackground(CONTROL);
+            popupPanel.setBorder(BorderFactory.createCompoundBorder(new RoundedBorder(BORDER, 8),
+                            BorderFactory.createEmptyBorder(1, 1, 1, 1)));
+            popupPanel.revalidate();
+            popupPanel.repaint();
+        }
+
+        @Override
+        public void show() {
+            if (isVisible() || !comboBox.isShowing()) {
+                return;
+            }
+
+            JRootPane rootPane = SwingUtilities.getRootPane(comboBox);
+            if (rootPane == null) {
+                return;
+            }
+
+            comboBox.firePopupMenuWillBecomeVisible();
+            syncFromComboBox();
+
+            layeredPane = rootPane.getLayeredPane();
+            layeredPane.add(popupPanel, JLayeredPane.POPUP_LAYER);
+
+            positionPopup();
+
+            popupPanel.setVisible(true);
+            popupPanel.revalidate();
+            popupPanel.repaint();
+
+            installHooks();
+        }
+
+        @Override
+        public void hide() {
+            boolean wasVisible = isVisible();
+
+            uninstallHooks();
+
+            Container parent = popupPanel.getParent();
+            if (parent != null) {
+                parent.remove(popupPanel);
+                parent.revalidate();
+                parent.repaint();
+            }
+
+            layeredPane = null;
+
+            if (wasVisible) {
+                comboBox.firePopupMenuWillBecomeInvisible();
+            }
+        }
+
+        @Override
+        public boolean isVisible() {
+            return popupPanel.getParent() != null;
+        }
+
+        @Override
+        public JList getList() {
+            return list;
+        }
+
+        @Override
+        public MouseListener getMouseListener() {
+            return invocationMouseListener;
+        }
+
+        @Override
+        public MouseMotionListener getMouseMotionListener() {
+            return null;
+        }
+
+        @Override
+        public KeyListener getKeyListener() {
+            return keyListener;
+        }
+
+        @Override
+        public void uninstallingUI() {
+            comboBox.removePropertyChangeListener(propertyChangeListener);
+            hide();
+        }
+
+        private void syncFromComboBox() {
+            list.setModel(comboBox.getModel());
+            list.setCellRenderer(comboBox.getRenderer());
+            list.setFont(comboBox.getFont());
+            list.setComponentOrientation(comboBox.getComponentOrientation());
+            list.setSelectedIndex(comboBox.getSelectedIndex());
+            applyTheme();
+            int rows = Math.max(1, Math.min(comboBox.getMaximumRowCount(), comboBox.getItemCount()));
+            list.setVisibleRowCount(rows);
+            if (list.getSelectedIndex() >= 0) {
+                list.ensureIndexIsVisible(list.getSelectedIndex());
+            }
+        }
+
+        private void positionPopup() {
+            Dimension preferred = popupPanel.getPreferredSize();
+            int width = Math.max(comboBox.getWidth(), preferred.width);
+            int height = preferred.height;
+            width = Math.min(width, layeredPane.getWidth());
+            height = Math.min(height, layeredPane.getHeight());
+
+            Point below = SwingUtilities.convertPoint(
+                    comboBox,
+                    0,
+                    comboBox.getHeight(),
+                    layeredPane);
+            Point top = SwingUtilities.convertPoint(
+                    comboBox,
+                    0,
+                    0,
+                    layeredPane);
+
+            int x = Math.max(0, Math.min(below.x, layeredPane.getWidth() - width));
+            int y = below.y;
+
+            if (y + height > layeredPane.getHeight() && top.y - height >= 0) {
+                y = top.y - height;
+            } else {
+                y = Math.max(0, Math.min(y, layeredPane.getHeight() - height));
+            }
+
+            popupPanel.setBounds(
+                    x,
+                    y,
+                    width,
+                    height);
+        }
+
+        private void installHooks() {
+            if (hooksInstalled) {
+                return;
+            }
+
+            hooksInstalled = true;
+
+            Toolkit.getDefaultToolkit().addAWTEventListener(outsideMouseListener, AWTEvent.MOUSE_EVENT_MASK);
+
+            ownerWindow = SwingUtilities.getWindowAncestor(comboBox);
+
+            if (ownerWindow != null) {
+                ownerWindow.addWindowFocusListener(windowFocusListener);
+            }
+        }
+
+        private void uninstallHooks() {
+            if (!hooksInstalled) {
+                return;
+            }
+
+            hooksInstalled = false;
+
+            Toolkit.getDefaultToolkit().removeAWTEventListener(outsideMouseListener);
+
+            if (ownerWindow != null) {
+                ownerWindow.removeWindowFocusListener(windowFocusListener);
+                ownerWindow = null;
+            }
+        }
+
+        private static boolean inside(Component child, Component ancestor) {
+            return child == ancestor || SwingUtilities.isDescendingFrom(child, ancestor);
+        }
+    }
+
     private static final class DarkComboBoxUI extends BasicComboBoxUI {
+
+        @Override
+        protected FocusListener createFocusListener() {
+            return new FocusAdapter() {
+                @Override
+                public void focusGained(FocusEvent event) {
+                    comboBox.repaint();
+                }
+
+                @Override
+                public void focusLost(FocusEvent event) {
+                    comboBox.repaint();
+                }
+            };
+        }
 
         @Override
         protected JButton createArrowButton() {
@@ -1661,18 +2278,7 @@ final class RelauncherUI {
 
         @Override
         protected ComboPopup createPopup() {
-            return new BasicComboPopup(comboBox) {
-                @Override
-                protected JScrollPane createScroller() {
-                    JScrollPane scroller = super.createScroller();
-                    scroller.setBorder(new RoundedBorder(BORDER, 8));
-                    scroller.getViewport().setBackground(CONTROL);
-                    JScrollBar bar = scroller.getVerticalScrollBar();
-                    bar.setUI(new DarkScrollBarUI());
-                    bar.setPreferredSize(new Dimension(10, bar.getPreferredSize().height));
-                    return scroller;
-                }
-            };
+            return new LayeredComboPopup(comboBox);
         }
 
     }
@@ -1705,10 +2311,22 @@ final class RelauncherUI {
 
         @Override
         protected void configureScrollBarColors() {
-            trackColor = BACKGROUND;
+            trackColor = scrollbar != null ? scrollbar.getBackground() : BACKGROUND;
             thumbColor = BORDER;
             thumbHighlightColor = CONTROL_HOVER;
             thumbDarkShadowColor = BORDER;
+            thumbLightShadowColor = BORDER;
+        }
+
+        @Override
+        protected void paintTrack(Graphics graphics, JComponent component, Rectangle bounds) {
+            graphics.setColor(component.getBackground());
+            graphics.fillRect(
+                    bounds.x,
+                    bounds.y,
+                    bounds.width,
+                    bounds.height
+            );
         }
 
         @Override
