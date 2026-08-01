@@ -187,7 +187,7 @@ public class LoadingGUI {
     public void updateStatus(String status) {
         SwingUtilities.invokeLater(() -> {
             statusLabel.setText(status);
-            statusLabel.setToolTipText(status);
+            RelauncherUI.tooltip(statusLabel, status);
         });
     }
 

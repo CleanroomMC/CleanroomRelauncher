@@ -15,8 +15,6 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.ItemEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
@@ -350,8 +348,8 @@ public abstract class RelauncherFrame extends JFrame {
 
         JButton autoDetect = new JButton("Find Installed Java");
         JButton test = new JButton("Test Java");
-        autoDetect.setToolTipText("Scan common install locations for Java " + MINIMUM_JAVA + "+");
-        test.setToolTipText("Verify the selected executable to be compatible with Cleanroom");
+        RelauncherUI.tooltip(autoDetect, "Scan common install locations for Java " + MINIMUM_JAVA + "+");
+        RelauncherUI.tooltip(test, "Verify the selected executable to be compatible with Cleanroom");
         options.add(autoDetect);
         options.add(test);
 
@@ -478,7 +476,7 @@ public abstract class RelauncherFrame extends JFrame {
         JTextField text = new JTextField(40);
         // Same UI face as the rest of the app
         text.setText(javaArgs);
-        text.setToolTipText("JVM flags passed to Cleanroom, e.g. -Xmx4G");
+        RelauncherUI.tooltip(text, "JVM flags passed to Cleanroom, e.g. -Xmx4G");
         text.setAlignmentX(Component.LEFT_ALIGNMENT);
         listenToTextFieldUpdate(text, t -> javaArgs = t.getText());
         RelauncherUI.installTextFieldFocus(text);
@@ -511,7 +509,7 @@ public abstract class RelauncherFrame extends JFrame {
                 continue; // Implicit, driven by the target Java version rather than by the user
             }
             JCheckBox checkBox = new JCheckBox(RelauncherUI.argumentLabel(arg));
-            checkBox.setToolTipText(RelauncherUI.argumentTooltip(arg));
+            RelauncherUI.tooltip(checkBox, RelauncherUI.argumentTooltip(arg));
 
             boolean preselected = javaArgsSupplied ? argumentPresent(javaArgs, arg) : arg.isSelectedByDefault();
             checkBox.setSelected(preselected);

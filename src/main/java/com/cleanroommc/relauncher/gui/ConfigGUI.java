@@ -93,7 +93,7 @@ public class ConfigGUI extends RelauncherFrame {
 
         JButton configSaveButton = new JButton("Save Settings");
         RelauncherUI.primary(configSaveButton);
-        configSaveButton.setToolTipText("Save and apply on next launch (Enter)");
+        RelauncherUI.tooltip(configSaveButton, "Save and apply on next launch (Enter)");
         this.getRootPane().setDefaultButton(configSaveButton);
         configSaveButton.addActionListener(e -> {
             if (selected == null) {
@@ -125,7 +125,7 @@ public class ConfigGUI extends RelauncherFrame {
 
         JButton configCancelButton = new JButton("Discard Changes");
         RelauncherUI.ghost(configCancelButton);
-        configCancelButton.setToolTipText("Close without saving (Esc)");
+        RelauncherUI.tooltip(configCancelButton, "Close without saving (Esc)");
         configCancelButton.addActionListener(e -> discardAndClose());
 
         configButtonPanel.add(configCancelButton);

@@ -16,7 +16,6 @@ import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
-import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
@@ -777,6 +776,11 @@ final class RelauncherUI {
         return row;
     }
 
+    static void tooltip(JComponent component, String text) {
+        component.setToolTipText(text);
+        LayeredToolTipSupport.install(component);
+    }
+
     /** Handle for a two-option segmented control, {@link #panel} is the component to add. */
     static final class SegmentedControl {
 
@@ -1029,6 +1033,7 @@ final class RelauncherUI {
             JComponent swing = (JComponent) component;
             swing.putClientProperty(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
             swing.putClientProperty(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+            LayeredToolTipSupport.install((JComponent) component);
         }
 
         if (component instanceof JCheckBox) {
@@ -1505,7 +1510,7 @@ final class RelauncherUI {
 
         private void updateDescription() {
             String description = isSelected() ? "Dark mode. Switch to light mode." : "Light mode. Switch to dark mode.";
-            setToolTipText(description);
+            tooltip(this, description);
             getAccessibleContext().setAccessibleDescription(description);
         }
 
@@ -1607,6 +1612,247 @@ final class RelauncherUI {
             g.dispose();
         }
 
+    }
+
+    private static final class LayeredToolTipSupport extends MouseAdapter {
+
+        private static final String INSTALLED = "relauncher.layeredToolTipInstalled";
+        private static final LayeredToolTipSupport INSTANCE = new LayeredToolTipSupport();
+
+        private static final int CURSOR_OFFSET_X = 12;
+        private static final int CURSOR_OFFSET_Y = 20;
+        private static final int FLIPPED_OFFSET_Y = 8;
+
+        private final Timer showTimer;
+        private final Timer dismissTimer;
+
+        private JComponent owner;
+        private Point ownerPoint;
+        private String text;
+
+        private JToolTip tip;
+        private JLayeredPane layeredPane;
+        private Window ownerWindow;
+
+        private final WindowAdapter windowListener = new WindowAdapter() {
+            @Override
+            public void windowLostFocus(WindowEvent event) {
+                hide();
+            }
+
+            @Override
+            public void windowClosed(WindowEvent event) {
+                hide();
+            }
+        };
+
+        private LayeredToolTipSupport() {
+            showTimer = new Timer(750, event -> showNow());
+            showTimer.setRepeats(false);
+
+            dismissTimer = new Timer(4000, event -> hide());
+            dismissTimer.setRepeats(false);
+        }
+
+        static void install(JComponent component) {
+            ToolTipManager.sharedInstance().unregisterComponent(component);
+
+            if (Boolean.TRUE.equals(component.getClientProperty(INSTALLED))) {
+                return;
+            }
+
+            component.putClientProperty(INSTALLED, Boolean.TRUE);
+
+            component.addMouseListener(INSTANCE);
+            component.addMouseMotionListener(INSTANCE);
+            component.addMouseWheelListener(INSTANCE);
+        }
+
+        @Override
+        public void mouseEntered(MouseEvent event) {
+            updateTarget(event);
+        }
+
+        @Override
+        public void mouseMoved(MouseEvent event) {
+            updateTarget(event);
+        }
+
+        @Override
+        public void mouseExited(MouseEvent event) {
+            if (event.getSource() == owner) {
+                hide();
+            }
+        }
+
+        @Override
+        public void mousePressed(MouseEvent event) {
+            hide();
+        }
+
+        @Override
+        public void mouseDragged(MouseEvent event) {
+            hide();
+        }
+
+        @Override
+        public void mouseWheelMoved(MouseWheelEvent event) {
+            hide();
+        }
+
+        private void updateTarget(MouseEvent event) {
+            if (!(event.getSource() instanceof JComponent)) {
+                hide();
+                return;
+            }
+
+            JComponent nextOwner = (JComponent) event.getSource();
+
+            if (!nextOwner.isEnabled() || !nextOwner.isShowing()) {
+                hide();
+                return;
+            }
+
+            String nextText = nextOwner.getToolTipText(event);
+
+            if (nextText == null || nextText.isEmpty()) {
+                if (nextOwner == owner) {
+                    hide();
+                }
+                return;
+            }
+
+            Point nextPoint = event.getPoint();
+
+            if (tip != null && nextOwner == owner) {
+                ownerPoint = nextPoint;
+                text = nextText;
+
+                tip.setTipText(text);
+                positionTip();
+
+                dismissTimer.restart();
+                return;
+            }
+
+            if (nextOwner != owner) {
+                hide();
+            }
+
+            owner = nextOwner;
+            ownerPoint = nextPoint;
+            text = nextText;
+
+            showTimer.restart();
+        }
+
+        private void showNow() {
+            if (owner == null || ownerPoint == null || text == null || !owner.isShowing()) {
+                hide();
+                return;
+            }
+
+            JRootPane rootPane = SwingUtilities.getRootPane(owner);
+
+            if (rootPane == null) {
+                hide();
+                return;
+            }
+
+            removeTipComponent();
+
+            layeredPane = rootPane.getLayeredPane();
+
+            tip = owner.createToolTip();
+            tip.setTipText(text);
+
+            tip.putClientProperty(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
+            tip.putClientProperty(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+
+            layeredPane.add(tip, Integer.valueOf(JLayeredPane.POPUP_LAYER + 1));
+
+            positionTip();
+
+            tip.setVisible(true);
+            tip.revalidate();
+            tip.repaint();
+
+            ownerWindow = SwingUtilities.getWindowAncestor(owner);
+
+            if (ownerWindow != null) {
+                ownerWindow.addWindowFocusListener(windowListener);
+            }
+
+            dismissTimer.restart();
+        }
+
+        private void positionTip() {
+            if (tip == null || layeredPane == null || owner == null || ownerPoint == null) {
+                return;
+            }
+
+            Point cursor = SwingUtilities.convertPoint(owner, ownerPoint, layeredPane);
+
+            Dimension size = tip.getPreferredSize();
+
+            int x = cursor.x + CURSOR_OFFSET_X;
+            int y = cursor.y + CURSOR_OFFSET_Y;
+
+            if (y + size.height > layeredPane.getHeight()) {
+                y = cursor.y - size.height - FLIPPED_OFFSET_Y;
+            }
+
+            int maxX = Math.max(0, layeredPane.getWidth() - size.width);
+            int maxY = Math.max(0, layeredPane.getHeight() - size.height);
+
+            x = Math.max(0, Math.min(x, maxX));
+            y = Math.max(0, Math.min(y, maxY));
+
+            tip.setBounds(
+                    x,
+                    y,
+                    size.width,
+                    size.height
+            );
+        }
+
+        private void hide() {
+            showTimer.stop();
+            dismissTimer.stop();
+
+            removeTipComponent();
+
+            owner = null;
+            ownerPoint = null;
+            text = null;
+        }
+
+        private void removeTipComponent() {
+            if (ownerWindow != null) {
+                ownerWindow.removeWindowFocusListener(windowListener);
+                ownerWindow = null;
+            }
+
+            if (tip != null) {
+                Container parent = tip.getParent();
+                if (parent != null) {
+                    Rectangle dirty = tip.getBounds();
+
+                    parent.remove(tip);
+                    parent.revalidate();
+                    parent.repaint(
+                            dirty.x,
+                            dirty.y,
+                            dirty.width,
+                            dirty.height
+                    );
+                }
+
+                tip = null;
+            }
+
+            layeredPane = null;
+        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

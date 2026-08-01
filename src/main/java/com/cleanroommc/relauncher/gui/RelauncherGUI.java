@@ -161,7 +161,7 @@ public class RelauncherGUI extends RelauncherFrame {
 
         JButton fastRelaunchBtn = new JButton("Relaunch Now");
         RelauncherUI.primary(fastRelaunchBtn);
-        fastRelaunchBtn.setToolTipText("Install the latest Cleanroom with automatic Java setup (Enter)");
+        RelauncherUI.tooltip(fastRelaunchBtn, "Install the latest Cleanroom with automatic Java setup (Enter)");
         fastRelaunchBtn.addActionListener(e -> {
             autoSetup = true;
             // Match the card: latest release + automatic Java, not leftover Advanced selections.
@@ -170,7 +170,7 @@ public class RelauncherGUI extends RelauncherFrame {
         });
         JButton advancedBtn = new JButton("Advanced Settings");
         RelauncherUI.ghost(advancedBtn);
-        advancedBtn.setToolTipText("Choose Cleanroom version, Java runtime, and JVM flags");
+        RelauncherUI.tooltip(advancedBtn, "Choose Cleanroom version, Java runtime, and JVM flags");
         advancedBtn.addActionListener(e -> showAdvancedScreen());
 
         fastRelaunchBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -233,7 +233,7 @@ public class RelauncherGUI extends RelauncherFrame {
         JButton fastUpdateBtn = new JButton("Update Now");
         RelauncherUI.primary(fastUpdateBtn);
         RelauncherUI.sizeActionButton(fastUpdateBtn, 160, 40);
-        fastUpdateBtn.setToolTipText("Install " + latestName + " and relaunch");
+        RelauncherUI.tooltip(fastUpdateBtn, "Install " + latestName + " and relaunch");
         fastUpdateBtn.addActionListener(e -> {
             autoSetup = true;
             selected = null;
@@ -242,7 +242,7 @@ public class RelauncherGUI extends RelauncherFrame {
 
         JButton skipBtn = new JButton("Keep Current");
         RelauncherUI.sizeActionButton(skipBtn, 150, 40);
-        skipBtn.setToolTipText("Stay on " + currentName + " for now");
+        RelauncherUI.tooltip(skipBtn, "Stay on " + currentName + " for now");
         skipBtn.addActionListener(e -> {
             autoSetup = true;
             dispose();
@@ -251,7 +251,7 @@ public class RelauncherGUI extends RelauncherFrame {
         JButton advancedBtn = new JButton("Advanced Settings");
         RelauncherUI.ghost(advancedBtn);
         RelauncherUI.sizeActionButton(advancedBtn, 200, 38);
-        advancedBtn.setToolTipText("Review version, Java, and JVM flags before updating");
+        RelauncherUI.tooltip(advancedBtn, "Review version, Java, and JVM flags before updating");
         advancedBtn.addActionListener(e -> showAdvancedScreen());
 
         startDefaultButton = fastUpdateBtn;
@@ -309,12 +309,12 @@ public class RelauncherGUI extends RelauncherFrame {
         JPanel relaunchButtonPanel = RelauncherUI.footer();
 
         JButton backButton = new JButton("Back");
-        backButton.setToolTipText("Return to the previous screen (Esc)");
+        RelauncherUI.tooltip(backButton, "Return to the previous screen (Esc)");
         backButton.addActionListener(e -> showStartScreen());
 
         JButton relaunchButton = new JButton("Relaunch with Cleanroom");
         RelauncherUI.primary(relaunchButton);
-        relaunchButton.setToolTipText("Validate settings and relaunch (Enter)");
+        RelauncherUI.tooltip(relaunchButton, "Validate settings and relaunch (Enter)");
         advancedDefaultButton = relaunchButton;
         relaunchButton.addActionListener(e -> {
             if (selected == null) {
