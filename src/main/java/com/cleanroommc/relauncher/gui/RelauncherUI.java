@@ -1024,6 +1024,22 @@ final class RelauncherUI {
         return footer;
     }
 
+    private static void styleScrollBar(JScrollBar scrollBar, Color trackBackground) {
+        scrollBar.setBackground(trackBackground);
+        scrollBar.setUI(new DarkScrollBarUI());
+        scrollBar.setBackground(trackBackground);
+        scrollBar.setOpaque(true);
+        scrollBar.setBorder(null);
+
+        Dimension preferred = scrollBar.getPreferredSize();
+
+        if (scrollBar.getOrientation() == Adjustable.VERTICAL) {
+            scrollBar.setPreferredSize(new Dimension(scaled(10), preferred.height));
+        } else {
+            scrollBar.setPreferredSize(new Dimension(preferred.width, scaled(10)));
+        }
+    }
+
     static void styleTree(Component component) {
         if (component.getFont() == null) {
             component.setFont(BASE_FONT);
@@ -1098,23 +1114,19 @@ final class RelauncherUI {
             text.setMaximumSize(new Dimension(Integer.MAX_VALUE, fieldHeight));
         } else if (component instanceof JComboBox) {
             JComboBox<?> comboBox = (JComboBox<?>) component;
-            comboBox.setUI(new DarkComboBoxUI());
             comboBox.setOpaque(false);
             comboBox.setBackground(CONTROL);
             comboBox.setForeground(TEXT);
+            installDarkRenderer(comboBox);
+            comboBox.setUI(new DarkComboBoxUI());
             comboBox.setBorder(new RoundedBorder(BORDER, 8));
             int comboHeight = scaled(36);
             comboBox.setPreferredSize(new Dimension(comboBox.getPreferredSize().width, comboHeight));
             comboBox.setMinimumSize(new Dimension(scaled(80), comboHeight));
             comboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, comboHeight));
-            installDarkRenderer(comboBox);
         } else if (component instanceof JScrollBar) {
             JScrollBar scrollBar = (JScrollBar) component;
-            scrollBar.setUI(new DarkScrollBarUI());
-            scrollBar.setBackground(BACKGROUND);
-            if (scrollBar.getOrientation() == Adjustable.VERTICAL) {
-                scrollBar.setPreferredSize(new Dimension(10, scrollBar.getPreferredSize().height));
-            }
+            styleScrollBar(scrollBar, BACKGROUND);
         } else if (component instanceof JProgressBar) {
             JProgressBar progressBar = (JProgressBar) component;
             progressBar.setUI(new ModernProgressBarUI());
@@ -1862,6 +1874,8 @@ final class RelauncherUI {
 
         private final JComboBox comboBox;
         private final JList list;
+        private final JScrollPane scroller;
+        private final JScrollBar verticalScrollBar;
         private final JPanel popupPanel;
 
         private final MouseListener invocationMouseListener;
@@ -1883,18 +1897,6 @@ final class RelauncherUI {
             list.setCellRenderer(comboBox.getRenderer());
             list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             list.setFocusable(false);
-            list.setBackground(comboBox.getBackground());
-            list.setForeground(comboBox.getForeground());
-
-            Color selectionBackground = UIManager.getColor("ComboBox.selectionBackground");
-            Color selectionForeground = UIManager.getColor("ComboBox.selectionForeground");
-
-            if (selectionBackground != null) {
-                list.setSelectionBackground(selectionBackground);
-            }
-            if (selectionForeground != null) {
-                list.setSelectionForeground(selectionForeground);
-            }
 
             list.addMouseListener(new MouseAdapter() {
                 @Override
@@ -1920,7 +1922,7 @@ final class RelauncherUI {
                 }
             });
 
-            JScrollPane scroller = new JScrollPane(
+            scroller = new JScrollPane(
                     list,
                     ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                     ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -1929,11 +1931,17 @@ final class RelauncherUI {
             scroller.setWheelScrollingEnabled(true);
             scroller.addMouseWheelListener(InputEvent::consume);
 
+            verticalScrollBar = scroller.getVerticalScrollBar();
+
             popupPanel = new JPanel(new BorderLayout());
             popupPanel.setOpaque(true);
             popupPanel.setBackground(comboBox.getBackground());
-            popupPanel.setBorder(UIManager.getBorder("PopupMenu.border"));
+            popupPanel.setBorder(BorderFactory.createCompoundBorder(new RoundedBorder(BORDER, 8),
+                    BorderFactory.createEmptyBorder(1, 1, 1, 1)));
+            popupPanel.putClientProperty(KEEP_OPAQUE, Boolean.TRUE);
             popupPanel.add(scroller, BorderLayout.CENTER);
+
+            applyTheme();
 
             invocationMouseListener = new MouseAdapter() {
                 @Override
@@ -2020,6 +2028,32 @@ final class RelauncherUI {
             comboBox.addPropertyChangeListener(propertyChangeListener);
         }
 
+        private void applyTheme() {
+            list.setOpaque(true);
+            list.setBackground(CONTROL);
+            list.setForeground(TEXT);
+            list.setSelectionBackground(PRIMARY);
+            list.setSelectionForeground(Color.WHITE);
+
+            scroller.setOpaque(true);
+            scroller.setBackground(CONTROL);
+            scroller.setBorder(null);
+
+            JViewport viewport = scroller.getViewport();
+            viewport.setOpaque(true);
+            viewport.setBackground(CONTROL);
+
+            styleScrollBar(verticalScrollBar, CONTROL);
+            verticalScrollBar.setUnitIncrement(18);
+
+            popupPanel.setOpaque(true);
+            popupPanel.setBackground(CONTROL);
+            popupPanel.setBorder(BorderFactory.createCompoundBorder(new RoundedBorder(BORDER, 8),
+                            BorderFactory.createEmptyBorder(1, 1, 1, 1)));
+            popupPanel.revalidate();
+            popupPanel.repaint();
+        }
+
         @Override
         public void show() {
             if (isVisible() || !comboBox.isShowing()) {
@@ -2103,6 +2137,7 @@ final class RelauncherUI {
             list.setFont(comboBox.getFont());
             list.setComponentOrientation(comboBox.getComponentOrientation());
             list.setSelectedIndex(comboBox.getSelectedIndex());
+            applyTheme();
             int rows = Math.max(1, Math.min(comboBox.getMaximumRowCount(), comboBox.getItemCount()));
             list.setVisibleRowCount(rows);
             if (list.getSelectedIndex() >= 0) {
@@ -2275,10 +2310,22 @@ final class RelauncherUI {
 
         @Override
         protected void configureScrollBarColors() {
-            trackColor = BACKGROUND;
+            trackColor = scrollbar != null ? scrollbar.getBackground() : BACKGROUND;
             thumbColor = BORDER;
             thumbHighlightColor = CONTROL_HOVER;
             thumbDarkShadowColor = BORDER;
+            thumbLightShadowColor = BORDER;
+        }
+
+        @Override
+        protected void paintTrack(Graphics graphics, JComponent component, Rectangle bounds) {
+            graphics.setColor(component.getBackground());
+            graphics.fillRect(
+                    bounds.x,
+                    bounds.y,
+                    bounds.width,
+                    bounds.height
+            );
         }
 
         @Override
