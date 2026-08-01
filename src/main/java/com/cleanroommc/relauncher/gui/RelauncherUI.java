@@ -1932,6 +1932,7 @@ final class RelauncherUI {
             scroller.addMouseWheelListener(InputEvent::consume);
 
             verticalScrollBar = scroller.getVerticalScrollBar();
+            verticalScrollBar.setUnitIncrement(scaled(10));
 
             popupPanel = new JPanel(new BorderLayout());
             popupPanel.setOpaque(true);
@@ -2044,7 +2045,7 @@ final class RelauncherUI {
             viewport.setBackground(CONTROL);
 
             styleScrollBar(verticalScrollBar, CONTROL);
-            verticalScrollBar.setUnitIncrement(18);
+            verticalScrollBar.setUnitIncrement(scaled(10));
 
             popupPanel.setOpaque(true);
             popupPanel.setBackground(CONTROL);
