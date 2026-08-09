@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.3] - 2026-08-09
+
+### Fixed
+- Scaling issues on X11 compositing environments
+
 ## [1.0.2] - 2026-08-04
 
 ### Fixed

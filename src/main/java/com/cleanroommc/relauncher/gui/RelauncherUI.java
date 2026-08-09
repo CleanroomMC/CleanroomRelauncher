@@ -45,6 +45,7 @@ final class RelauncherUI {
     }
 
     private static final boolean WINDOWS = Platform.current().isWindows();
+    private static final boolean X11 = isX11Session();
     private static final String PRIMARY_BUTTON = "relauncher.primaryButton";
     private static final String COMPACT_BUTTON = "relauncher.compactButton";
     private static final String GHOST_BUTTON = "relauncher.ghostButton";
@@ -149,6 +150,17 @@ final class RelauncherUI {
             return CleanroomRelauncher.CONFIG.getDarkMode();
         } catch (LinkageError | RuntimeException ignored) { }
         return true;
+    }
+
+    private static boolean isX11Session() {
+        String sessionType = System.getenv("XDG_SESSION_TYPE");
+        if ("x11".equalsIgnoreCase(sessionType)) {
+            return true;
+        }
+        if ("wayland".equalsIgnoreCase(sessionType)) {
+            return false;
+        }
+        return System.getenv("DISPLAY") != null && System.getenv("WAYLAND_DISPLAY") == null;
     }
 
     private static void setPalette(boolean dark) {
@@ -332,13 +344,19 @@ final class RelauncherUI {
     }
 
     static void install() {
-        // LCD/ClearType on Windows
-        System.setProperty("awt.useSystemAAFontSettings", "lcd");
-        System.setProperty("swing.aatext", "true");
+        if (WINDOWS) {
+            // LCD/ClearType on Windows
+            System.setProperty("awt.useSystemAAFontSettings", "lcd");
+            System.setProperty("swing.aatext", "true");
+        }
         try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            String lookAndFeel = UIManager.getSystemLookAndFeelClassName();
+            // GTK's X11 HiDPI support can scale text twice while Java2D keeps component geometry at 1x (JDK-8058742)
+            if (X11 && lookAndFeel.contains(".gtk.")) {
+                lookAndFeel = UIManager.getCrossPlatformLookAndFeelClassName();
+            }
+            UIManager.setLookAndFeel(lookAndFeel);
         } catch (Exception ignored) { }
-
         String[] fontKeys = {
                 "Button.font", "Label.font", "ComboBox.font", "TextField.font",
                 "CheckBox.font", "ToggleButton.font", "Panel.font", "OptionPane.font", "List.font"
