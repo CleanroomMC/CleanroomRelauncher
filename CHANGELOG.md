@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.4] - 2026-08-13
+
+### Fixed
+- Java option arguments being picked up during installations being parsed
+
 ## [1.0.3] - 2026-08-09
 
 ### Fixed
