@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.5] - 2026-08-14
+
+### Fixed
+- Extraction of installations in older macOS's failing 
+
 ## [1.0.4] - 2026-08-13
 
 ### Fixed
