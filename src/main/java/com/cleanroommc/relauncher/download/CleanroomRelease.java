@@ -13,8 +13,15 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
 
 import static com.cleanroommc.relauncher.CleanroomRelauncher.CONFIG;
 
@@ -24,6 +31,7 @@ public class CleanroomRelease {
     private static final int CONNECT_TIMEOUT_MS = 5_000;
     private static final int READ_TIMEOUT_MS    = 15_000;
     private static final String USER_AGENT = "Mozilla/5.0 CleanroomRelauncher/1.0";
+    private static final String MAVEN_RELEASES_BASE = "https://repo.cleanroommc.com/releases/com/cleanroommc/cleanroom/";
 
     public static List<CleanroomRelease> queryAll() throws IOException {
         long ttlM = Duration.ofHours(1).toMillis(); // TODO: configurable, this is temp
@@ -43,7 +51,18 @@ public class CleanroomRelease {
         } else {
             CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
         }
-        List<CleanroomRelease> releases = fetchReleasesFromGithub();
+        List<CleanroomRelease> releases;
+        try {
+            releases = fetchReleasesFromGithub();
+        } catch (IOException githubFailure) {
+            CleanroomRelauncher.LOGGER.warn("Unable to fetch releases from GitHub, falling back to CleanroomMC Maven.", githubFailure);
+            try {
+                releases = fetchReleasesFromMaven();
+            } catch (IOException mavenFailure) {
+                mavenFailure.addSuppressed(githubFailure);
+                throw mavenFailure;
+            }
+        }
 
         // After fetching releases, save them to the cache
         saveReleasesToCache(CACHE_FILE, releases);
@@ -64,13 +83,97 @@ public class CleanroomRelease {
             if (connection.getResponseCode() != 200) {
                 throw new IOException("Failed to fetch releases: HTTP error code " + connection.getResponseCode());
             }
-
             try (InputStreamReader reader = new InputStreamReader(connection.getInputStream())) {
                 return Arrays.asList(CleanroomRelauncher.GSON.fromJson(reader, CleanroomRelease[].class));
             }
         } catch (Exception e) {
             throw new IOException("Failed to fetch or parse releases", e);
         }
+    }
+
+    private static List<CleanroomRelease> fetchReleasesFromMaven() throws IOException {
+        try {
+            URL url = new URL(MAVEN_RELEASES_BASE + "maven-metadata.xml");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(READ_TIMEOUT_MS);
+            connection.setRequestProperty("Accept", "application/xml");
+            connection.setRequestProperty("User-Agent", USER_AGENT);
+            connection.setInstanceFollowRedirects(false);
+
+            if (connection.getResponseCode() != 200) {
+                throw new IOException("Failed to fetch Maven releases: HTTP error code " + connection.getResponseCode());
+            }
+            try (InputStreamReader reader = new InputStreamReader(connection.getInputStream())) {
+                return parseMavenReleases(reader);
+            }
+        } catch (Exception e) {
+            throw new IOException("Failed to fetch or parse Maven releases", e);
+        }
+    }
+
+    static List<CleanroomRelease> parseMavenReleases(Reader reader) throws IOException {
+        XMLInputFactory factory = XMLInputFactory.newFactory();
+        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+        factory.setProperty("javax.xml.stream.isSupportingExternalEntities", false);
+        List<CleanroomRelease> releases = new ArrayList<>();
+        try {
+            XMLStreamReader xml = factory.createXMLStreamReader(reader);
+            boolean inVersions = false;
+            while (xml.hasNext()) {
+                int event = xml.next();
+                if (event == XMLStreamConstants.START_ELEMENT) {
+                    if ("versions".equals(xml.getLocalName())) {
+                        inVersions = true;
+                    } else if (inVersions && "version".equals(xml.getLocalName())) {
+                        String version = xml.getElementText().trim();
+                        if (!version.isEmpty() && hasMavenMultiMcPack(version)) {
+                            releases.add(mavenRelease(version));
+                        }
+                    }
+                } else if (event == XMLStreamConstants.END_ELEMENT && "versions".equals(xml.getLocalName())) {
+                    inVersions = false;
+                }
+            }
+            xml.close();
+        } catch (XMLStreamException e) {
+            throw new IOException("Unable to parse Maven metadata", e);
+        }
+        // Maven metadata is oldest-first, while callers expect the latest release at index zero
+        Collections.reverse(releases);
+        return releases;
+    }
+
+    private static boolean hasMavenMultiMcPack(String version) {
+        // The Maven publication did not include the MMC ZIP until 0.3.20-alpha
+        String[] parts = version.split("[.-]", 4);
+        if (parts.length < 3) {
+            return false;
+        }
+        try {
+            int major = Integer.parseInt(parts[0]);
+            int minor = Integer.parseInt(parts[1]);
+            int patch = Integer.parseInt(parts[2]);
+            return major > 0 || minor > 3 || minor == 3 && patch >= 20;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
+    private static CleanroomRelease mavenRelease(String version) {
+        CleanroomRelease release = new CleanroomRelease();
+        release.name = version;
+        release.tagName = version;
+        release.assets = Arrays.asList(mavenAsset(version, "-installer.jar"), mavenAsset(version, ".zip"));
+        return release;
+    }
+
+    private static Asset mavenAsset(String version, String suffix) {
+        Asset asset = new Asset();
+        asset.name = "cleanroom-" + version + suffix;
+        asset.downloadUrl = MAVEN_RELEASES_BASE + version + "/" + asset.name;
+        return asset;
     }
 
     /**

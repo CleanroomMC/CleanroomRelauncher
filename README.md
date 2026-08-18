@@ -1,6 +1,6 @@
 ## Cleanroom Relauncher
 
-**Supports only the major Cleanroom versions via GitHub releases at the moment.**
+**Supports Cleanroom versions via GitHub Releases, with CleanroomMC Maven as a fallback.**
 
 **Supports client-side relaunching, server-side soon.**
 
