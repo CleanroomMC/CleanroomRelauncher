@@ -34,155 +34,11 @@ public class CleanroomRelauncher {
 
     public static final Logger LOGGER = LogManager.getLogger("CleanroomRelauncher");
     public static final Gson GSON = new Gson();
-    public static final Path CACHE_DIR = Paths.get(System.getProperty("user.home"), ".cleanroom", "relauncher");
-    public static final Path JAVA_PROVISION_DIR = Paths.get(System.getProperty("user.home"), ".cleanroom", "java");
+    public static final Path CACHE_DIR = home().resolve("relauncher");
+    public static final Path JAVA_PROVISION_DIR = home().resolve("java");
     public static final RelauncherConfiguration CONFIG = RelauncherConfiguration.read();
 
     public CleanroomRelauncher() { }
-
-    private static boolean isCleanroom() {
-        try {
-            Class.forName("com.cleanroommc.boot.Main");
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
-    }
-
-    private static void replaceCerts() {
-        if (JavaVersion.parseOrThrow(System.getProperty("java.version")).build() <= 101) {
-            try (InputStream is = CleanroomRelauncher.class.getResource("/cacerts").openStream()) {
-                File cacertsCopy = File.createTempFile("cacerts", "");
-                cacertsCopy.deleteOnExit();
-                FileUtils.copyInputStreamToFile(is, cacertsCopy);
-                System.setProperty("javax.net.ssl.trustStore", cacertsCopy.getAbsolutePath());
-                CleanroomRelauncher.LOGGER.info("Successfully replaced CA Certs.");
-            } catch (Exception e) {
-                throw new RuntimeException("Unable to replace CA Certs!", e);
-            }
-        }
-    }
-
-    private static List<CleanroomRelease> releases() {
-        try {
-            return CleanroomRelease.queryAll();
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to query Cleanroom's releases and no cached releases found.", e);
-        }
-    }
-
-    private static List<Version> versions(CleanroomCache cache) {
-        try {
-            return cache.download(); // Blocking
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to grab CleanroomVersion to relaunch.", e);
-        }
-    }
-
-    private static String getOrExtract() {
-        String manifestFile = "META-INF/MANIFEST.MF";
-        String wrapperDirectory = "wrapper/com/cleanroommc/relauncher/wrapper";
-        String wrapperFile = wrapperDirectory + "/RelaunchMainWrapper.class";
-
-        File relauncherJarFile;
-        try {
-            relauncherJarFile = JavaUtils.jarLocationOf(CleanroomRelauncher.class);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        try (FileSystem containerFs = FileSystems.newFileSystem(relauncherJarFile.toPath(), null)) {
-            String originalHash;
-            try (InputStream is = Files.newInputStream(containerFs.getPath(manifestFile))) {
-                originalHash = new Manifest(is).getMainAttributes().getValue("WrapperHash");
-            } catch (Throwable t) {
-                throw new RuntimeException("Unable to read original hash of the wrapper class file", t);
-            }
-
-            Path cachedWrapperDirectory = CleanroomRelauncher.CACHE_DIR.resolve(wrapperDirectory);
-            Path cachedWrapperFile = CleanroomRelauncher.CACHE_DIR.resolve(wrapperFile);
-
-            boolean skip = false;
-
-            if (Files.exists(cachedWrapperFile)) {
-                try (InputStream is = Files.newInputStream(cachedWrapperFile)) {
-                    String cachedHash = DigestUtils.md5Hex(is);
-                    if (originalHash.equals(cachedHash)) {
-                        CleanroomRelauncher.LOGGER.warn("Hashes matched, no need to copy from jar again.");
-                        skip = true;
-                    }
-                } catch (Throwable t) {
-                    CleanroomRelauncher.LOGGER.error("Unable to calculate MD5 hash to compare.", t);
-                }
-            }
-
-            if (!skip) {
-                if (Files.exists(cachedWrapperDirectory)) {
-                    try (Stream<Path> stream = Files.walk(cachedWrapperDirectory)) {
-                        stream.filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
-                    }
-                } else {
-                    Files.createDirectories(cachedWrapperDirectory);
-                }
-                Path wrapperJarDirectory = containerFs.getPath("/wrapper/");
-                try (DirectoryStream<Path> stream = Files.newDirectoryStream(wrapperJarDirectory)) {
-                    for (Path path : stream) {
-                        Path to = cachedWrapperFile.resolveSibling(path.getFileName().toString());
-                        Files.copy(path, to);
-                        CleanroomRelauncher.LOGGER.debug("Moved {} to {}", path.toAbsolutePath().toString(), to.toAbsolutePath().toString());
-                    }
-                }
-            }
-
-            return CleanroomRelauncher.CACHE_DIR.resolve("wrapper").toAbsolutePath().toString();
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to extract relauncher's jar file", e);
-        }
-    }
-
-    private static RelauncherGUI showGUI(List<CleanroomRelease> releases, CleanroomRelease selected, String javaPath,
-            String javaArgs, JavaVersion javaTarget, JavaDistro javaVendor, boolean autoSetup, boolean updateNotification) {
-        return RelauncherGUI.show(releases, $ -> {
-            $.selected           = selected;
-            $.javaPath           = javaPath;
-            $.targetSelected     = javaTarget;
-            $.vendorSelected     = javaVendor;
-            $.javaArgs           = javaArgs;
-            $.autoSetup          = autoSetup;
-            $.updateNotification = CONFIG.getFetchUpdatesEnabled() && updateNotification;
-        });
-    }
-
-    public static void clearFolders() {
-        if (CONFIG.getClearCleanroomFolderEnabled() || CONFIG.getClearJavaProvisionFolderEnabled()) {
-            if (CONFIG.getClearCleanroomFolderEnabled()) {
-                deleteFolder(CACHE_DIR);
-                CONFIG.setClearCleanroomFolder(false);
-            }
-            if (CONFIG.getClearJavaProvisionFolderEnabled()) {
-                deleteFolder(JAVA_PROVISION_DIR);
-                CONFIG.setClearJavaProvisionFolder(false);
-            }
-            CONFIG.save();
-        }
-    }
-
-    public static void deleteFolder(Path folder) {
-        if (!Files.exists(folder)) return;
-
-        try (Stream<Path> walker = Files.walk(folder)) {
-            walker.sorted(Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) {
-                            LOGGER.error("Failed to delete: {},{}", path, e);
-                        }
-                    });
-        } catch (IOException e) {
-            LOGGER.error("Failed to walk folder: {},{}", folder, e);
-        }
-    }
 
     static void run() {
         if (isCleanroom()) {
@@ -389,6 +245,158 @@ public class CleanroomRelauncher {
             } catch (IOException | InterruptedException e) {
                 throw new RuntimeException(e);
             }
+        }
+    }
+
+    private static boolean isCleanroom() {
+        try {
+            Class.forName("com.cleanroommc.boot.Main");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    private static void replaceCerts() {
+        if (JavaVersion.parseOrThrow(System.getProperty("java.version")).build() <= 101) {
+            try (InputStream is = CleanroomRelauncher.class.getResource("/cacerts").openStream()) {
+                File cacertsCopy = File.createTempFile("cacerts", "");
+                cacertsCopy.deleteOnExit();
+                FileUtils.copyInputStreamToFile(is, cacertsCopy);
+                System.setProperty("javax.net.ssl.trustStore", cacertsCopy.getAbsolutePath());
+                CleanroomRelauncher.LOGGER.info("Successfully replaced CA Certs.");
+            } catch (Exception e) {
+                throw new RuntimeException("Unable to replace CA Certs!", e);
+            }
+        }
+    }
+
+    private static List<CleanroomRelease> releases() {
+        try {
+            return CleanroomRelease.queryAll();
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to query Cleanroom's releases and no cached releases found.", e);
+        }
+    }
+
+    private static List<Version> versions(CleanroomCache cache) {
+        try {
+            return cache.download(); // Blocking
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to grab CleanroomVersion to relaunch.", e);
+        }
+    }
+
+    private static String getOrExtract() {
+        String manifestFile = "META-INF/MANIFEST.MF";
+        String wrapperDirectory = "wrapper/com/cleanroommc/relauncher/wrapper";
+        String wrapperFile = wrapperDirectory + "/RelaunchMainWrapper.class";
+
+        File relauncherJarFile;
+        try {
+            relauncherJarFile = JavaUtils.jarLocationOf(CleanroomRelauncher.class);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        try (FileSystem containerFs = FileSystems.newFileSystem(relauncherJarFile.toPath(), null)) {
+            String originalHash;
+            try (InputStream is = Files.newInputStream(containerFs.getPath(manifestFile))) {
+                originalHash = new Manifest(is).getMainAttributes().getValue("WrapperHash");
+            } catch (Throwable t) {
+                throw new RuntimeException("Unable to read original hash of the wrapper class file", t);
+            }
+
+            Path cachedWrapperDirectory = CleanroomRelauncher.CACHE_DIR.resolve(wrapperDirectory);
+            Path cachedWrapperFile = CleanroomRelauncher.CACHE_DIR.resolve(wrapperFile);
+
+            boolean skip = false;
+
+            if (Files.exists(cachedWrapperFile)) {
+                try (InputStream is = Files.newInputStream(cachedWrapperFile)) {
+                    String cachedHash = DigestUtils.md5Hex(is);
+                    if (originalHash.equals(cachedHash)) {
+                        CleanroomRelauncher.LOGGER.warn("Hashes matched, no need to copy from jar again.");
+                        skip = true;
+                    }
+                } catch (Throwable t) {
+                    CleanroomRelauncher.LOGGER.error("Unable to calculate MD5 hash to compare.", t);
+                }
+            }
+
+            if (!skip) {
+                if (Files.exists(cachedWrapperDirectory)) {
+                    try (Stream<Path> stream = Files.walk(cachedWrapperDirectory)) {
+                        stream.filter(Files::isRegularFile).map(Path::toFile).forEach(File::delete);
+                    }
+                } else {
+                    Files.createDirectories(cachedWrapperDirectory);
+                }
+                Path wrapperJarDirectory = containerFs.getPath("/wrapper/");
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(wrapperJarDirectory)) {
+                    for (Path path : stream) {
+                        Path to = cachedWrapperFile.resolveSibling(path.getFileName().toString());
+                        Files.copy(path, to);
+                        CleanroomRelauncher.LOGGER.debug("Moved {} to {}", path.toAbsolutePath().toString(), to.toAbsolutePath().toString());
+                    }
+                }
+            }
+
+            return CleanroomRelauncher.CACHE_DIR.resolve("wrapper").toAbsolutePath().toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to extract relauncher's jar file", e);
+        }
+    }
+
+    private static RelauncherGUI showGUI(List<CleanroomRelease> releases, CleanroomRelease selected, String javaPath,
+            String javaArgs, JavaVersion javaTarget, JavaDistro javaVendor, boolean autoSetup, boolean updateNotification) {
+        return RelauncherGUI.show(releases, $ -> {
+            $.selected           = selected;
+            $.javaPath           = javaPath;
+            $.targetSelected     = javaTarget;
+            $.vendorSelected     = javaVendor;
+            $.javaArgs           = javaArgs;
+            $.autoSetup          = autoSetup;
+            $.updateNotification = CONFIG.getFetchUpdatesEnabled() && updateNotification;
+        });
+    }
+
+    private static Path home() {
+        String home = System.getProperty("cleanroom.homeDir");
+        if (home == null || home.trim().isEmpty()) {
+            return Paths.get(System.getProperty("user.home"), ".cleanroom");
+        }
+        return Paths.get(home.trim());
+    }
+
+    private static void clearFolders() {
+        if (CONFIG.getClearCleanroomFolderEnabled() || CONFIG.getClearJavaProvisionFolderEnabled()) {
+            if (CONFIG.getClearCleanroomFolderEnabled()) {
+                deleteFolder(CACHE_DIR);
+                CONFIG.setClearCleanroomFolder(false);
+            }
+            if (CONFIG.getClearJavaProvisionFolderEnabled()) {
+                deleteFolder(JAVA_PROVISION_DIR);
+                CONFIG.setClearJavaProvisionFolder(false);
+            }
+            CONFIG.save();
+        }
+    }
+
+    private static void deleteFolder(Path folder) {
+        if (!Files.exists(folder)) return;
+
+        try (Stream<Path> walker = Files.walk(folder)) {
+            walker.sorted(Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.delete(path);
+                        } catch (IOException e) {
+                            LOGGER.error("Failed to delete: {},{}", path, e);
+                        }
+                    });
+        } catch (IOException e) {
+            LOGGER.error("Failed to walk folder: {},{}", folder, e);
         }
     }
 

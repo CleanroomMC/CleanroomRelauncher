@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.1] - 2026-08-20
+
+### Added
+- Ability to change Cleanroom's home directory (where Relauncher & Java provisioning caches data) via `cleanroom.homeDir` property
+
 ## [1.1.0] - 2026-08-18
 
 ### Added

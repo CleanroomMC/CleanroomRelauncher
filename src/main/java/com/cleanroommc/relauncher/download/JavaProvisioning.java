@@ -142,6 +142,7 @@ public class JavaProvisioning {
     }
 
     private static String autoProvisionJavaInstall(JavaVersion target, JavaDistro vendor, LoadingGUI loading, JavaProvisioner provisioner) {
+        CleanroomRelauncher.LOGGER.info("Provisioning a Java {} install from {}", target, vendor);
         try {
             provisioner.onDownload((downloaded, total, fileName) -> {
                 if (total > 0) {
