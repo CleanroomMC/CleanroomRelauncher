@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.2] - 2026-08-23
+
+### Fixed
+- Logic concerning whether to notify the user of the latest Cleanroom release
+
 ## [1.1.1] - 2026-08-20
 
 ### Added

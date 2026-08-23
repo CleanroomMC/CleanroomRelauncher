@@ -66,8 +66,7 @@ public class CleanroomRelauncher {
         JavaDistro javaVendor = CONFIG.getJavaVendor();
         boolean autoSetup = CONFIG.getAutoSetup();
         boolean relauncherEnabled = CONFIG.getRelauncherEnabled();
-        boolean needsNotifyLatest = notedLatestVersion == null ||
-                (!notedLatestVersion.equals(latestRelease.name) && (!Objects.equals(CONFIG.getCleanroomVersion(), latestRelease.name)));
+        boolean needsNotifyLatest = shouldNotifyLatestRelease(latestRelease.name, selectedVersion);
         if (selectedVersion != null) {
             selected = releases.stream().filter(cr -> cr.name.equals(selectedVersion)).findFirst().orElse(null);
         }
@@ -359,6 +358,12 @@ public class CleanroomRelauncher {
             $.autoSetup          = autoSetup;
             $.updateNotification = CONFIG.getFetchUpdatesEnabled() && updateNotification;
         });
+    }
+
+    private static boolean shouldNotifyLatestRelease(String localLatest, String selectedVersion) {
+        return CONFIG.getFetchUpdatesEnabled()
+                && !Objects.equals(localLatest, selectedVersion)
+                && !Objects.equals(CONFIG.getLatestCleanroomVersion(), localLatest);
     }
 
     private static Path home() {
