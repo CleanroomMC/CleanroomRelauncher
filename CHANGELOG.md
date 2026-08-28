@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.3] - 2026-08-28
+
+### Fixed
+- Issue with transitive dependencies causing crash
+
 ## [1.1.2] - 2026-08-23
 
 ### Fixed

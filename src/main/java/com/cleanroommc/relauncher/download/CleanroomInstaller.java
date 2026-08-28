@@ -42,8 +42,12 @@ public class CleanroomInstaller implements CleanroomZipArtifact {
     public void extract(CleanroomCache cache) throws IOException {
         try (FileSystem jar = FileSystems.newFileSystem(this.location, null)) {
             Files.copy(jar.getPath("/version.json"), cache.getVersionJson());
-            Files.copy(jar.getPath("/maven/com/cleanroommc/cleanroom/" + this.version + "/cleanroom-" + this.version + ".jar"), cache.getUniversalJar());
+            Files.copy(jar.getPath(universalEntry(this.version)), cache.getUniversalJar());
         }
+    }
+
+    static String universalEntry(String version) {
+        return "/maven/com/cleanroommc/cleanroom/" + version + "/cleanroom-" + version + "-universal.jar";
     }
 
 }
