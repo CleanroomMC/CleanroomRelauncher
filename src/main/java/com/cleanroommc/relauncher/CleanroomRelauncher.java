@@ -24,6 +24,7 @@ import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -278,11 +279,25 @@ public class CleanroomRelauncher {
         }
     }
 
+    private static final ExecutorService DownloadExecutor =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "cleanroom-version-download");
+                t.setDaemon(true);
+                return t;
+            });
     private static List<Version> versions(CleanroomCache cache) {
-        try {
-            return cache.download(); // Blocking
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to grab CleanroomVersion to relaunch.", e);
+        Future<List<Version>> future = DownloadExecutor.submit(cache::download);
+        try{
+            return future.get(3, TimeUnit.MINUTES);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            throw new RuntimeException("Timed out while trying to grab CleanroomVersion.", e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Unable to grab CleanroomVersion to relaunch.", e.getCause());
+        } catch (InterruptedException e) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Unable to grab CleanroomVersion to relaunch.", e.getCause());
         }
     }
 
