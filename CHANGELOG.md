@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.4] - 2026-09-07
+
+## Changed
+- Capped 3 minutes timeout on fetching versions and downloading
+
 ## [1.1.3] - 2026-08-28
 
 ### Fixed

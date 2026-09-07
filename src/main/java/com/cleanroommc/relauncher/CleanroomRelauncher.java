@@ -39,6 +39,13 @@ public class CleanroomRelauncher {
     public static final Path JAVA_PROVISION_DIR = home().resolve("java");
     public static final RelauncherConfiguration CONFIG = RelauncherConfiguration.read();
 
+    private static final ExecutorService downloadExecutor =
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "cleanroom-version-download");
+                t.setDaemon(true);
+                return t;
+            });
+
     public CleanroomRelauncher() { }
 
     static void run() {
@@ -279,14 +286,8 @@ public class CleanroomRelauncher {
         }
     }
 
-    private static final ExecutorService DownloadExecutor =
-            Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "cleanroom-version-download");
-                t.setDaemon(true);
-                return t;
-            });
     private static List<Version> versions(CleanroomCache cache) {
-        Future<List<Version>> future = DownloadExecutor.submit(cache::download);
+        Future<List<Version>> future = downloadExecutor.submit(cache::download);
         try{
             return future.get(3, TimeUnit.MINUTES);
         } catch (TimeoutException e) {
