@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.5] - 2026-10-10
+
+### Changed
+- Downloads now time out per file (10 seconds to connect, 30 seconds to read) and retry up to 3 times, replacing the overall 3 minutes cap
+
+### Fixed
+- Interrupted or truncated Java downloads leaving behind a broken install that gets picked up on later launches
+- Java provisioning downloading builds for the wrong architecture, operating system or C library (musl/glibc)
+- Provisioned Java installs nested inside Cleanroom's home directory not being detected
+
 ## [1.1.4] - 2026-09-07
 
 ### Changed
