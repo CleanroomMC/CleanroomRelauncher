@@ -24,7 +24,6 @@ import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.nio.file.*;
 import java.util.*;
-import java.util.concurrent.*;
 import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -38,13 +37,6 @@ public class CleanroomRelauncher {
     public static final Path CACHE_DIR = home().resolve("relauncher");
     public static final Path JAVA_PROVISION_DIR = home().resolve("java");
     public static final RelauncherConfiguration CONFIG = RelauncherConfiguration.read();
-
-    private static final ExecutorService downloadExecutor =
-            Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "cleanroom-version-download");
-                t.setDaemon(true);
-                return t;
-            });
 
     public CleanroomRelauncher() { }
 
@@ -287,18 +279,10 @@ public class CleanroomRelauncher {
     }
 
     private static List<Version> versions(CleanroomCache cache) {
-        Future<List<Version>> future = downloadExecutor.submit(cache::download);
-        try{
-            return future.get(3, TimeUnit.MINUTES);
-        } catch (TimeoutException e) {
-            future.cancel(true);
-            throw new RuntimeException("Timed out while trying to grab CleanroomVersion.", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Unable to grab CleanroomVersion to relaunch.", e.getCause());
-        } catch (InterruptedException e) {
-            future.cancel(true);
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Unable to grab CleanroomVersion to relaunch.", e.getCause());
+        try {
+            return cache.download(); // Blocking
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to grab CleanroomVersion to relaunch.", e);
         }
     }
 

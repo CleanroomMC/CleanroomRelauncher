@@ -27,6 +27,10 @@ public final class GlobalDownloader {
 
     public static final GlobalDownloader INSTANCE = new GlobalDownloader();
 
+    private static final int CONNECT_TIMEOUT_MS = 10_000;
+    private static final int READ_TIMEOUT_MS = 30_000;
+    private static final int MAX_ATTEMPTS = 3;
+
     private final ConcurrentMap<Path, ForkJoinTask<?>> downloads = new ConcurrentHashMap<>();
 
     public ForkJoinTask<?> from(String source, File destination, String expectedHash, CacheUtils.HashAlgorithm algo) {
@@ -115,12 +119,22 @@ public final class GlobalDownloader {
                 ".tmp"
         ).toFile();
         try {
-            FileUtils.copyURLToFile(url, temp);
-            if (expectedHash != null && algo != null) {
-                String actualHash = CacheUtils.hash(temp, algo);
-                if (!expectedHash.equalsIgnoreCase(actualHash)) {
-                    throw new IOException(String.format("Hash mismatch for %s - expected %s (%s) but got %s",
-                            destination, expectedHash, algo.name(), actualHash));
+            for (int attempt = 1; ; attempt++) {
+                try {
+                    FileUtils.copyURLToFile(url, temp, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS);
+                    if (expectedHash != null && algo != null) {
+                        String actualHash = CacheUtils.hash(temp, algo);
+                        if (!expectedHash.equalsIgnoreCase(actualHash)) {
+                            throw new IOException(String.format("Hash mismatch for %s - expected %s (%s) but got %s",
+                                    destination, expectedHash, algo.name(), actualHash));
+                        }
+                    }
+                    break;
+                } catch (IOException e) {
+                    if (attempt == MAX_ATTEMPTS) {
+                        throw e;
+                    }
+                    CleanroomRelauncher.LOGGER.warn("Download attempt {}/{} failed for {}, retrying...", attempt, MAX_ATTEMPTS, url, e);
                 }
             }
             Files.move(temp.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING);
