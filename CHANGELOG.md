@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.6] - 2026-10-11
+
+### Fixed
+- Files being re-downloaded on every launch when they do not come with a comparable hash or algorithm
+
 ## [1.1.5] - 2026-10-10
 
 ### Changed
