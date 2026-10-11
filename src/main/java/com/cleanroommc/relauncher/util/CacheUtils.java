@@ -32,7 +32,7 @@ public class CacheUtils {
             return true;
         }
         if (expectedHash == null || algo == null) {
-            return true;
+            return false;
         }
         return !expectedHash.equalsIgnoreCase(hash(file, algo));
     }
