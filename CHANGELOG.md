@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0] - 2026-10-13
+
+### Added
+- Support for Cleanroom 0.7.x releases and its new MultiMC pack layout
+
+### Fixed
+- Crash with `NoSuchFileException: /patches/net.minecraft.json` when relaunching into a 0.7.x release
+
 ## [1.1.6] - 2026-10-11
 
 ### Fixed
