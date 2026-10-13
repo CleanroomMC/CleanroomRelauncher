@@ -63,13 +63,17 @@ public class Version {
             if (library.downloads == null) {
                 continue; // Locally-zipped artifact
             }
-            Path libraryJar = librariesDirectory.resolve(library.downloads.artifact.getPath(library.name));
-            try{
-                if (CacheUtils.isFileCorrupt(libraryJar.toFile(), library.downloads.artifact.sha1, CacheUtils.HashAlgorithm.SHA1)) {
-                    GlobalDownloader.INSTANCE.from(library.downloads.artifact.url, libraryJar.toFile(), library.downloads.artifact.sha1, CacheUtils.HashAlgorithm.SHA1);
+            // Natives-only entries carry classifiers without a main artifact
+            if (library.downloads.artifact != null) {
+                Path libraryJar = librariesDirectory.resolve(library.downloads.artifact.getPath(library.name));
+                try{
+                    if (CacheUtils.isFileCorrupt(libraryJar.toFile(), library.downloads.artifact.sha1, CacheUtils.HashAlgorithm.SHA1)) {
+                        GlobalDownloader.INSTANCE.from(library.downloads.artifact.url, libraryJar.toFile(), library.downloads.artifact.sha1, CacheUtils.HashAlgorithm.SHA1);
+                    }
+                } catch (IOException e) {
+                    CleanroomRelauncher.LOGGER.error(library.downloads.artifact.url, e);
                 }
-            } catch (IOException e) {
-                CleanroomRelauncher.LOGGER.error(library.downloads.artifact.url, e);
+                libraryPaths.add(libraryJar.toAbsolutePath().toString());
             }
             Download nativeArtifact = library.getNative(Platform.current());
             if (nativeArtifact != null) {
@@ -82,7 +86,6 @@ public class Version {
                     CleanroomRelauncher.LOGGER.error(nativeArtifact.url, e);
                 }
             }
-            libraryPaths.add(libraryJar.toAbsolutePath().toString());
         }
     }
 
@@ -301,15 +304,16 @@ public class Version {
         @Deprecated
         public String getPath(String name) {
             if (path == null) {
-                // Fixme: URLs match, so its fine for now
-                if (url.startsWith("https://libraries.minecraft.net/")) {
-                    path = url.substring("https://libraries.minecraft.net/".length());
+                String[] splits = name.split(":");
+                String groupId = splits[0];
+                String artifactId = splits[1];
+                String version = splits[2];
+                String groupPath = groupId.replace('.', '/');
+                // Classifier downloads share their library's name, only the URL tells them apart
+                int mavenPathIndex = url.indexOf(groupPath + '/' + artifactId + '/');
+                if (mavenPathIndex > -1) {
+                    path = url.substring(mavenPathIndex);
                 } else {
-                    String[] splits = name.split(":");
-                    String groupId = splits[0];
-                    String artifactId = splits[1];
-                    String version = splits[2];
-                    String groupPath = groupId.replace('.', '/');
                     path = String.format("%s/%s/%s/%s-%s.jar", groupPath, artifactId, version, artifactId, version);
                 }
             }
