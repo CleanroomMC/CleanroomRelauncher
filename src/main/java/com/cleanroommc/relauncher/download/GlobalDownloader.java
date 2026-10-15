@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -121,7 +122,11 @@ public final class GlobalDownloader {
         try {
             for (int attempt = 1; ; attempt++) {
                 try {
-                    FileUtils.copyURLToFile(url, temp, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS);
+                    URLConnection connection = url.openConnection();
+                    connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+                    connection.setReadTimeout(READ_TIMEOUT_MS);
+                    connection.setRequestProperty("User-Agent", CleanroomRelease.USER_AGENT);
+                    FileUtils.copyInputStreamToFile(connection.getInputStream(), temp);
                     if (expectedHash != null && algo != null) {
                         String actualHash = CacheUtils.hash(temp, algo);
                         if (!expectedHash.equalsIgnoreCase(actualHash)) {

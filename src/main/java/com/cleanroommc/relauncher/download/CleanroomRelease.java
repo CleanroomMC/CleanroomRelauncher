@@ -30,7 +30,7 @@ public class CleanroomRelease {
     private static final Path CACHE_FILE = CleanroomRelauncher.CACHE_DIR.resolve("releases.json");
     private static final int CONNECT_TIMEOUT_MS = 5_000;
     private static final int READ_TIMEOUT_MS    = 15_000;
-    private static final String USER_AGENT = "Mozilla/5.0 CleanroomRelauncher/1.0";
+    static final String USER_AGENT = "Mozilla/5.0 CleanroomRelauncher/1.0";
     private static final String MAVEN_RELEASES_BASE = "https://repo.cleanroommc.com/releases/com/cleanroommc/cleanroom/";
 
     public static List<CleanroomRelease> queryAll() throws IOException {
