@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.1] - 2026-10-15
+
+### Changed
+- Use the same User-Agent across the board for downloads, fixes issue with recent updates to Cloudflare's Browser Integrity Checks
+
 ## [1.2.0] - 2026-10-13
 
 ### Added
