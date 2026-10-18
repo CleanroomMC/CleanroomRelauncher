@@ -227,8 +227,17 @@ public class CleanroomRelauncher {
             arguments.add("net.minecraftforge.fml.common.launcher.FMLTweaker"); // Fixme, gather from Version?
 
             LOGGER.debug("Relauncher arguments:");
-            for (String arg: arguments) {
-                LOGGER.debug(arg);
+            boolean hideNext = false;
+            for (String arg : arguments) {
+                if (hideNext) {
+                    LOGGER.debug("[REDACTED]");
+                    hideNext = false;
+                } else if ("--accessToken".equals(arg)) {
+                    LOGGER.debug(arg);
+                    hideNext = true;
+                } else {
+                    LOGGER.debug(arg);
+                }
             }
 
             ProcessBuilder processBuilder = new ProcessBuilder(arguments);
