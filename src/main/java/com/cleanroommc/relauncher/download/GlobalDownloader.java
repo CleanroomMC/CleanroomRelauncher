@@ -73,6 +73,15 @@ public final class GlobalDownloader {
         }
 
         int total = downloadsToWaitFor.size();
+        if (total == 0) {
+            return;
+        }
+
+        boolean hasActiveDownloads = downloadsToWaitFor.stream().anyMatch(task -> !task.isDone());
+        if (hasActiveDownloads) {
+            loading.show();
+        }
+
         int completed = 0;
         int last = 0;
         for (ForkJoinTask<?> download : downloadsToWaitFor) {
@@ -80,29 +89,32 @@ public final class GlobalDownloader {
                 download.get();
                 completed++;
                 int percentage = (completed * 100) / total;
-                if (percentage % 10 == 0 && last != percentage) {
+                if (hasActiveDownloads && (percentage >= last + 10 || completed == total)) {
                     last = percentage;
                     loading.updateStatus("Download Progress: " + completed + "/" + total + " | " + percentage + "% completed.");
                     loading.setProgress(percentage);
                     CleanroomRelauncher.LOGGER.info("Download Progress: {}/{} | {}% completed.", completed, total, percentage);
                 }
-            } catch (InterruptedException | ExecutionException e) {
-                SwingUtilities.invokeLater(loading::close);
-                if (e instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException("Interrupted while waiting for downloads", e);
-                }
-                throw unwrapDownloadFailure((ExecutionException) e);
+            } catch (InterruptedException e) {
+                loading.close();
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted while waiting for downloads", e);
+            } catch (ExecutionException e) {
+                loading.close();
+                throw unwrapDownloadFailure(e);
             }
         }
-        SwingUtilities.invokeLater(() -> {
+
+        if (hasActiveDownloads) {
             loading.disableProgress();
             loading.updateStatus("Download Complete");
-        });
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            CleanroomRelauncher.LOGGER.warn("Interrupted thread sleep", e);
+
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                CleanroomRelauncher.LOGGER.warn("Interrupted thread sleep", e);
+            }
         }
     }
 

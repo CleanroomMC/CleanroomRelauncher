@@ -6,7 +6,6 @@ import com.cleanroommc.relauncher.download.CleanroomRelease;
 import com.cleanroommc.relauncher.download.GlobalDownloader;
 import com.cleanroommc.relauncher.download.schema.Version;
 import com.cleanroommc.relauncher.gui.LoadingGUI;
-import com.cleanroommc.relauncher.util.CacheUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -84,7 +83,7 @@ public class CleanroomCache {
         for (Version version : versions) {
             version.downloadLibraries(librariesDirectory);
         }
-        loading.show();
+
         GlobalDownloader.INSTANCE.blockUntilFinished(loading);
 
         for (Version version : versions) {
