@@ -20,52 +20,40 @@ import java.util.stream.Collectors;
 public class JavaProvisioning {
 
     public static String validateOrProvisionJava(String path, JavaVersion target, JavaDistro vendor) {
-        LoadingGUI loading = new LoadingGUI();
-        loading.show();
+        if (path != null && !path.isEmpty()) {
+            CleanroomRelauncher.LOGGER.info("Checking path: {}", path);
+            if (testJava(path, vendor, target)) {
+                return path;
+            }
+            CleanroomRelauncher.LOGGER.warn("Invalid Java path, searching for another installation...");
+        }
+
         JavaVersion provisioningTarget = target == null ? JavaVersion.parseOrThrow(25) : target;
         JavaDistro provisioningVendor = vendor == null ? JavaDistro.ZULU : vendor;
 
-        JavaProvisioner provisioner = JavaProvisioner.provisioners().stream()
-                .findFirst()
-                .orElseGet(FoojayJavaProvisioner::new);
+        LoadingGUI loading = new LoadingGUI();
+        loading.show();
 
-        if (path != null && !path.isEmpty()) {
-            try {
-                loading.updateStatus("Checking provided path...");
-                CleanroomRelauncher.LOGGER.info("Checking path: {}", path);
-                if (testJava(path, vendor, target)) {
-                    return path;
-                }
-                CleanroomRelauncher.LOGGER.warn("Invalid path, Fetching a new java instance");
-                loading.updateStatus("Scanning for Java " + provisioningTarget.major() + " Installations ...");
-                String binaryPath = getBinaryPath(provisioningTarget, provisioningVendor, loading);
-                if (binaryPath != null) {
-                    return binaryPath;
-                }
-                loading.updateStatus("No Java found. Downloading...");
-                CleanroomRelauncher.LOGGER.warn("Found no available Java installation, Auto-provisioning...");
-                return autoProvisionJavaInstall(provisioningTarget, provisioningVendor, loading, provisioner);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } finally {
-                loading.close();
-            }
-        } else {
-            try {
-                loading.updateStatus("Scanning for Java " + provisioningTarget.major() + " Installations ...");
+        try {
+            loading.updateStatus("Scanning for Java " + provisioningTarget.major() + " installations...");
 
-                String binaryPath = getBinaryPath(provisioningTarget, provisioningVendor, loading);
-                if (binaryPath != null) {
-                    return binaryPath;
-                }
-                loading.close();
-                loading.updateStatus("No Valid Java found. Downloading...");
-                return autoProvisionJavaInstall(provisioningTarget, provisioningVendor, loading, provisioner);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } finally {
-                loading.close();
+            String binaryPath = getBinaryPath(provisioningTarget, provisioningVendor, loading);
+            if (binaryPath != null) {
+                return binaryPath;
             }
+
+            loading.updateStatus("No valid Java found. Downloading...");
+            CleanroomRelauncher.LOGGER.warn("No compatible Java installation found, auto-provisioning...");
+
+            JavaProvisioner provisioner = JavaProvisioner.provisioners().stream()
+                    .findFirst()
+                    .orElseGet(FoojayJavaProvisioner::new);
+
+            return autoProvisionJavaInstall(provisioningTarget, provisioningVendor, loading, provisioner);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } finally {
+            loading.close();
         }
     }
 
@@ -88,7 +76,6 @@ public class JavaProvisioning {
                 String binaryPath = javaInstall.executable(true).toAbsolutePath().toString();
                 loading.updateStatus("Testing: " + javaInstall.distro().name());
                 if (testJava(currentInstallPath)) {
-                    loading.close();
                     return binaryPath;
                 }
             }

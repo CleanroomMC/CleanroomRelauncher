@@ -197,7 +197,7 @@ public class CleanroomRelauncher {
             arguments.add(fullClassPath); // Ensure this is not empty
 
             if (javaArgs != null && !javaArgs.isEmpty()) {
-                Arrays.stream(javaArgs.split(" ")).map(String::trim).forEach(arguments::add);
+                arguments.addAll(parseJavaArgs(javaArgs));
             }
 
             for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
@@ -227,8 +227,17 @@ public class CleanroomRelauncher {
             arguments.add("net.minecraftforge.fml.common.launcher.FMLTweaker"); // Fixme, gather from Version?
 
             LOGGER.debug("Relauncher arguments:");
-            for (String arg: arguments) {
-                LOGGER.debug(arg);
+            boolean hideNext = false;
+            for (String arg : arguments) {
+                if (hideNext) {
+                    LOGGER.debug("[REDACTED]");
+                    hideNext = false;
+                } else if ("--accessToken".equals(arg)) {
+                    LOGGER.debug(arg);
+                    hideNext = true;
+                } else {
+                    LOGGER.debug(arg);
+                }
             }
 
             ProcessBuilder processBuilder = new ProcessBuilder(arguments);
@@ -403,6 +412,57 @@ public class CleanroomRelauncher {
         } catch (IOException e) {
             LOGGER.error("Failed to walk folder: {},{}", folder, e);
         }
+    }
+
+    private static List<String> parseJavaArgs(String input) {
+        List<String> result = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+
+        char quote = 0;
+
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            if (c == '\\' && i + 1 < input.length()) {
+                char next = input.charAt(i + 1);
+
+                if (quote == 0 ? (Character.isWhitespace(next) || next == '"' || next == '\'') : (next == quote || next == '\\')) {
+                    current.append(next);
+                    i++;
+                    continue;
+                }
+            }
+
+            if (c == '"' || c == '\'') {
+                if (quote == 0) {
+                    quote = c;
+                    continue;
+                }
+                if (quote == c) {
+                    quote = 0;
+                    continue;
+                }
+            }
+
+            if (quote == 0 && Character.isWhitespace(c)) {
+                if (current.length() > 0) {
+                    result.add(current.toString());
+                    current.setLength(0);
+                }
+                continue;
+            }
+
+            current.append(c);
+        }
+
+        if (quote != 0) {
+            throw new IllegalArgumentException("Unterminated quoted JVM argument: " + input);
+        }
+
+        if (current.length() > 0) {
+            result.add(current.toString());
+        }
+
+        return result;
     }
 
 }
