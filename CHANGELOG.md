@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0] - 2026-10-22
+
+### Changed
+- Fetch Cleanroom releases from CleanroomMC's Maven first, with GitHub as the fallback
+- Java arguments now support multiple whitespace, quotes and escape characters
+- Removed eMudhra's emSign root CAs from the bundled CA certs used on Java 8u101 and older, following their distrust after the eMudhra key compromise
+
+### Fixed
+- Crash with `No Cleanroom releases are available to relaunch with.` when GitHub returns an empty release list
+- An empty cached release list no longer persists, it is fetched again on the next launch
+- `accessToken` is no longer printed in the relauncher's debug log
+- Loading popups no longer flash briefly on later launches when nothing needs downloading
+
 ## [1.2.1] - 2026-10-15
 
 ### Changed
