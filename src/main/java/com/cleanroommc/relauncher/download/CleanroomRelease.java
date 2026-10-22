@@ -42,25 +42,29 @@ public class CleanroomRelease {
                 long diffM = nowM - fileModifiedM;
                 boolean cacheIsFresh = diffM < ttlM;
                 if (!CONFIG.getFetchUpdatesEnabled() || cacheIsFresh) {
-                    return fetchReleasesFromCache(CACHE_FILE);
+                    List<CleanroomRelease> cached = fetchReleasesFromCache(CACHE_FILE);
+                    if (!cached.isEmpty()) {
+                        return cached;
+                    }
+                    CleanroomRelauncher.LOGGER.warn("Cached releases.json is empty, fetching releases...");
                 }
             } catch (Throwable t) {
                 Files.delete(CACHE_FILE);
-                CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to connect to GitHub and rebuild.", t);
+                CleanroomRelauncher.LOGGER.error("Unable to read cached releases.json, attempting to rebuild.", t);
             }
         } else {
             CleanroomRelauncher.LOGGER.info("No cache found, fetching releases...");
         }
         List<CleanroomRelease> releases;
         try {
-            releases = fetchReleasesFromGithub();
-        } catch (IOException githubFailure) {
-            CleanroomRelauncher.LOGGER.warn("Unable to fetch releases from GitHub, falling back to CleanroomMC Maven.", githubFailure);
+            releases = fetchReleasesFromMaven();
+        } catch (IOException mavenFailure) {
+            CleanroomRelauncher.LOGGER.warn("Unable to fetch releases from CleanroomMC Maven, falling back to GitHub.", mavenFailure);
             try {
-                releases = fetchReleasesFromMaven();
-            } catch (IOException mavenFailure) {
-                mavenFailure.addSuppressed(githubFailure);
-                throw mavenFailure;
+                releases = fetchReleasesFromGithub();
+            } catch (IOException githubFailure) {
+                githubFailure.addSuppressed(mavenFailure);
+                throw githubFailure;
             }
         }
 
@@ -84,7 +88,11 @@ public class CleanroomRelease {
                 throw new IOException("Failed to fetch releases: HTTP error code " + connection.getResponseCode());
             }
             try (InputStreamReader reader = new InputStreamReader(connection.getInputStream())) {
-                return Arrays.asList(CleanroomRelauncher.GSON.fromJson(reader, CleanroomRelease[].class));
+                List<CleanroomRelease> releases = Arrays.asList(CleanroomRelauncher.GSON.fromJson(reader, CleanroomRelease[].class));
+                if (releases.isEmpty()) {
+                    throw new IOException("GitHub returned no releases");
+                }
+                return releases;
             }
         } catch (Exception e) {
             throw new IOException("Failed to fetch or parse releases", e);
@@ -106,7 +114,11 @@ public class CleanroomRelease {
                 throw new IOException("Failed to fetch Maven releases: HTTP error code " + connection.getResponseCode());
             }
             try (InputStreamReader reader = new InputStreamReader(connection.getInputStream())) {
-                return parseMavenReleases(reader);
+                List<CleanroomRelease> releases = parseMavenReleases(reader);
+                if (releases.isEmpty()) {
+                    throw new IOException("Maven returned no releases");
+                }
+                return releases;
             }
         } catch (Exception e) {
             throw new IOException("Failed to fetch or parse Maven releases", e);
