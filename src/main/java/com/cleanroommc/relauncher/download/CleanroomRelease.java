@@ -75,7 +75,7 @@ public class CleanroomRelease {
 
     private static List<CleanroomRelease> fetchReleasesFromGithub() throws IOException {
         try {
-            URL url = new URL("https://api.github.com/repos/CleanroomMC/Cleanroom/releases");
+            URL url = new URL("https://api.github.com/repos/CleanroomMC/Cleanroom/releases?per_page=100");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
