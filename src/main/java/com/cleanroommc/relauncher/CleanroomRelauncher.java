@@ -215,6 +215,12 @@ public class CleanroomRelauncher {
             arguments.add("-Dcleanroom.relauncher.mainClass=" + versions.get(0).mainClass);
             arguments.add("-Djava.library.path=" + versions.stream().map(version -> version.nativesPaths).flatMap(Collection::stream).collect(Collectors.joining(File.pathSeparator)));
 
+            for (Version version : versions) {
+                if (version.jvmArgs != null) {
+                    arguments.addAll(version.jvmArgs);
+                }
+            }
+
             arguments.add("com.cleanroommc.relauncher.wrapper.RelaunchMainWrapper");
 
             // Forward any extra game launch arguments

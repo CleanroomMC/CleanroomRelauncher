@@ -5,6 +5,7 @@ import com.cleanroommc.platformutils.Platform;
 import com.cleanroommc.relauncher.CleanroomRelauncher;
 import com.cleanroommc.relauncher.download.GlobalDownloader;
 import com.cleanroommc.relauncher.util.CacheUtils;
+import com.google.gson.annotations.SerializedName;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -51,6 +52,8 @@ public class Version {
     public String releaseTime;
     public String time;
     public String type;
+    @SerializedName("+jvmArgs")
+    public List<String> jvmArgs;
 
     public transient List<String> libraryPaths = new ArrayList<>();
     public transient List<String> nativesPaths = new ArrayList<>();
