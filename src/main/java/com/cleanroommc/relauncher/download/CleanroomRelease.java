@@ -73,6 +73,13 @@ public class CleanroomRelease {
         return releases;
     }
 
+    /**
+     * @return null when Maven has no MMC pack for this version
+     */
+    public static CleanroomRelease fromMaven(String version) {
+        return hasMavenMultiMcPack(version) ? mavenRelease(version) : null;
+    }
+
     private static List<CleanroomRelease> fetchReleasesFromGithub() throws IOException {
         try {
             URL url = new URL("https://api.github.com/repos/CleanroomMC/Cleanroom/releases?per_page=100");

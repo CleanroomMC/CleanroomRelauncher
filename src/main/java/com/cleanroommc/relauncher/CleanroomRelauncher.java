@@ -69,6 +69,14 @@ public class CleanroomRelauncher {
         boolean needsNotifyLatest = shouldNotifyLatestRelease(latestRelease.name, selectedVersion);
         if (selectedVersion != null) {
             selected = releases.stream().filter(cr -> cr.name.equals(selectedVersion)).findFirst().orElse(null);
+            if (selected == null) {
+                selected = CleanroomRelease.fromMaven(selectedVersion);
+                if (selected != null) {
+                    LOGGER.warn("Cleanroom v{} is not in the fetched release list, keeping it pinned.", selectedVersion);
+                    releases = new ArrayList<>(releases);
+                    releases.add(selected);
+                }
+            }
         }
         if (javaPath != null && !new File(javaPath).isFile()) {
             javaPath = null;
