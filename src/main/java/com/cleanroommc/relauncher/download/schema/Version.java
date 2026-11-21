@@ -54,6 +54,7 @@ public class Version {
     public String type;
     @SerializedName("+jvmArgs")
     public List<String> jvmArgs;
+    public List<Integer> compatibleJavaMajors;
 
     public transient List<String> libraryPaths = new ArrayList<>();
     public transient List<String> nativesPaths = new ArrayList<>();
